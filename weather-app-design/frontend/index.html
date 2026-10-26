@@ -4,18 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mausam · India weather</title>
+  <meta name="description" content="A simple, honest view of the weather in India right now and later today.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Manrope:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
-    <div class="brand">
+    <h1 class="brand">
       <small>India · at a glance</small>
-      Mausam
-    </div>
-    <button class="theme-toggle" id="themeBtn" aria-label="Switch theme">Switch theme</button>
+      <span class="mark">Mausam</span>
+    </h1>
+    <button class="theme-toggle" id="themeBtn" aria-label="Switch theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+      <span>Theme</span>
+    </button>
   </header>
 
   <main>
@@ -26,7 +33,7 @@
       </div>
       <div class="map-wrap">
         <svg viewBox="0 0 500 600" role="img" aria-label="Simplified map of India with selectable cities">
-          <!-- Simplified India silhouette; the real map art replaces this later. -->
+          <!-- Simplified India silhouette; the real border polygon lands in a later PR. -->
           <path class="land" d="
             M 128 24
             C 170 18 220 40 258 48
@@ -50,62 +57,82 @@
           <g id="cities"></g>
         </svg>
       </div>
-      <div class="map-hint" id="mapHint">Tap a dot to see today's weather.</div>
+      <div class="map-hint">Tap a dot to see today's weather</div>
     </section>
 
-    <section class="weather" id="weatherCard" aria-live="polite" hidden>
-      <div class="place">
-        <div>
-          <h2 id="cityName">—</h2>
-          <p id="cityNote"></p>
+    <section class="weather" id="weatherCard" aria-live="polite" aria-busy="false" data-mood="clear-day" hidden>
+      <div class="sky">
+        <div class="sky-head">
+          <div>
+            <h2 class="place-name" id="cityName">—</h2>
+            <p class="place-sub" id="citySub"></p>
+            <span class="badge" id="moodBadge" hidden></span>
+          </div>
+          <div class="asof" id="asOf"></div>
         </div>
-        <div class="asof" id="asOf"></div>
-      </div>
 
-      <div class="now">
-        <div class="icon-box" id="iconBox" aria-hidden="true"></div>
-        <div>
-          <div class="temp"><span id="tempNum">—</span><sup>°C</sup></div>
-          <div class="cond" id="condText"></div>
-          <p class="oneliner" id="oneliner"></p>
+        <div class="hero">
+          <div>
+            <div class="temp-wrap">
+              <span class="temp" id="tempNum">—</span>
+              <span class="temp-unit">°C</span>
+            </div>
+            <div class="cond" id="condText"></div>
+            <p class="oneliner" id="oneliner"></p>
+          </div>
+          <div class="icon-box" id="iconBox" aria-hidden="true"></div>
         </div>
       </div>
 
-      <div class="stats">
-        <div class="stat"><div class="k">Feels like</div><div class="v" id="feels">—</div></div>
-        <div class="stat"><div class="k">Rain next hour</div><div class="v" id="rain">—</div></div>
-        <div class="stat"><div class="k">Wind</div><div class="v" id="wind">—</div></div>
-        <div class="stat"><div class="k">Humidity</div><div class="v" id="hum">—</div></div>
-      </div>
+      <div class="panel-body">
+        <div class="stats">
+          <div class="stat"><div class="k">Feels like</div><div class="v" id="feels">—</div></div>
+          <div class="stat"><div class="k">Rain next hour</div><div class="v" id="rain">—</div></div>
+          <div class="stat"><div class="k">Wind</div><div class="v" id="wind">—</div></div>
+          <div class="stat"><div class="k">Humidity</div><div class="v" id="hum">—</div></div>
+        </div>
 
-      <div class="hourly">
-        <h3>Later today</h3>
-        <div class="hours" id="hours"></div>
-      </div>
+        <div class="hourly">
+          <div class="section-head">
+            <h3>Later today</h3>
+            <span class="meta" id="hourlyRange">next 12 hours</span>
+          </div>
+          <div class="chart-wrap" id="chartWrap">
+            <svg class="chart" id="chart" viewBox="0 0 600 68" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div class="cells" id="hours"></div>
+          </div>
+        </div>
 
-      <div class="sun-row">
-        <span>Sunrise <b id="sunrise">—</b></span>
-        <span>Sunset <b id="sunset">—</b></span>
+        <div class="sun">
+          <div class="section-head">
+            <h3>Sun today</h3>
+            <span class="meta" id="dayLen"></span>
+          </div>
+          <div class="sun-track">
+            <svg id="sunTrack" viewBox="0 0 400 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <div class="sun-labels">
+            <span>Sunrise <b id="sunrise">—</b></span>
+            <span>Sunset <b id="sunset">—</b></span>
+          </div>
+        </div>
       </div>
 
       <div class="credit">
         Weather data from
         <a href="https://api.met.no" rel="noopener">MET Norway</a>
-        (<a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>)
-        <span id="imdCredit" hidden> · and the
-          <a href="https://mausam.imd.gov.in/" rel="noopener">India Meteorological Department</a></span>.
+        (<a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>)<span id="imdCredit" hidden> · with
+        <a href="https://mausam.imd.gov.in/" rel="noopener">India Meteorological Department</a></span>.
       </div>
     </section>
 
-    <section class="weather" id="emptyCard">
-      <div class="empty">
-        <h2>Welcome</h2>
-        <p>Pick a city on the map to see its weather right now and later today.</p>
-      </div>
+    <section class="weather empty" id="emptyCard">
+      <h2>Welcome</h2>
+      <p>Pick a city on the map to see its weather right now and later today — temperature, rain chance, when the sun sets, and whether to grab an umbrella on the way out.</p>
     </section>
   </main>
 
-  <div class="error" id="errorBar" hidden></div>
+  <div class="error" id="errorBar" role="alert" hidden></div>
 
   <script src="app.js"></script>
 </body>
