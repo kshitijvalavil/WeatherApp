@@ -111,6 +111,7 @@ async function select(id) {
 
   const city = state.cities.find(c => c.id === id);
   if (city && state.map) state.map.flyTo([city.lat, city.lon], 6, { duration: 0.8 });
+  refreshAllMarkers();
 
   // Note IMD state in the footer.
   const imdNote = document.getElementById("imdNote");
@@ -122,6 +123,10 @@ async function select(id) {
 // ---------- Hero ----------
 function renderHero(data) {
   const c = data.city, w = data.current;
+  const hero = document.getElementById("hero");
+  hero.dataset.sym = w.symbol || "partly";
+  hero.classList.remove("rain", "thunder", "cloudy", "sunny", "partly", "haze");
+  hero.classList.add(w.symbol || "partly");
   document.getElementById("heroPlace").textContent = `${c.name}${c.state ? ", " + c.state : ""}`;
   document.getElementById("heroTemp").textContent = w.temp_c == null ? "—" : Math.round(w.temp_c);
   document.getElementById("heroLabel").textContent = labelFor(w.symbol);
@@ -133,9 +138,29 @@ function renderHero(data) {
   }
   document.getElementById("heroIcon").innerHTML = `<svg viewBox="0 0 64 64"><use href="#i-${w.symbol}"/></svg>`;
   document.getElementById("heroSentence").textContent = SENTENCES[w.symbol] || "";
-  // Tint the sky to match condition.
   document.getElementById("heroSky").style.background = skyFor(w.symbol);
+  renderRainStreaks(w.symbol);
   updateHeroTime();
+}
+
+function renderRainStreaks(sym) {
+  const host = document.querySelector("#rainLayer svg");
+  if (!host) return;
+  const isWet = sym === "rain" || sym === "thunder";
+  host.innerHTML = "";
+  if (!isWet) return;
+  for (let i = 0; i < 40; i++) {
+    const x = Math.random() * 400;
+    const delay = Math.random() * 1.2;
+    const dur = 0.7 + Math.random() * 0.5;
+    const len = 8 + Math.random() * 14;
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    el.setAttribute("x1", x); el.setAttribute("y1", -20);
+    el.setAttribute("x2", x - 4); el.setAttribute("y2", -20 + len);
+    el.style.animationDuration = dur + "s";
+    el.style.animationDelay = delay + "s";
+    host.appendChild(el);
+  }
 }
 
 function updateHeroTime() {
@@ -201,33 +226,42 @@ function renderHighlights(data) {
   // UV
   const uv = c.uv_index == null ? null : Math.round(c.uv_index);
   document.getElementById("uvVal").textContent = uv == null ? "—" : uv;
-  document.getElementById("uvLabel").textContent = uv == null ? "" : uvLabel(uv);
+  document.getElementById("uvLabel").textContent = uv == null ? "—" : uvLabel(uv);
   document.getElementById("uvCap").textContent = uv == null ? "" : uvCaption(uv);
   const path = document.getElementById("uvArc");
   if (path && uv != null) {
     const len = path.getTotalLength();
     const fill = Math.min(uv, 11) / 11 * len;
     path.setAttribute("stroke-dasharray", `${fill} ${len}`);
+    // Position the UV dot at the end of the filled arc.
+    const pt = path.getPointAtLength(fill);
+    const dot = document.getElementById("uvDot");
+    if (dot) {
+      dot.style.left = `calc(${(pt.x / 200) * 100}% - 5px)`;
+      dot.style.top = `calc(${(pt.y / 100) * 100}% - 5px)`;
+    }
   }
 
   // Wind
   document.getElementById("windVal").textContent = c.wind_kmh == null ? "—" : Math.round(c.wind_kmh);
-  document.getElementById("windU").textContent = c.wind_dir == null ? "km/h" : `km/h ${compass(c.wind_dir)}`;
+  document.getElementById("windSub").textContent = c.wind_dir == null ? "" : `from ${compass(c.wind_dir)}`;
   document.getElementById("windCap").textContent = windCaption(c.wind_kmh);
 
   // Sun
   const sr = fmtTime(data.sun?.sunrise);
   const ss = fmtTime(data.sun?.sunset);
-  document.getElementById("sunriseVal").textContent = sr?.hm || "—";
+  document.getElementById("sunriseVal").textContent = sr?.full || "—";
+  document.getElementById("sunsetSub").textContent = ss ? `Sets ${ss.full}` : "Sets —";
   document.getElementById("sunriseLabel").textContent = sr ? `↑ ${sr.full}` : "↑ —";
   document.getElementById("sunsetLabel").textContent = ss ? `↓ ${ss.full}` : "↓ —";
-  // Position the sun dot along the arc by progress through daytime.
   positionSunDot(data.sun?.sunrise, data.sun?.sunset);
 
   // Humidity
   const h = c.humidity;
   document.getElementById("humVal").textContent = h == null ? "—" : Math.round(h);
   renderHumBars(data.hourly || [], h);
+  const dew = (h != null && c.temp_c != null) ? Math.round(c.temp_c - ((100 - h) / 5)) : null;
+  document.getElementById("humSub").textContent = dew == null ? "" : `Dew point ${dew}°`;
   document.getElementById("humCap").textContent = humCaption(h);
 
   // Visibility
@@ -375,13 +409,14 @@ function initMap() {
   });
   state.map = map;
   const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  // CARTO Voyager has subtle city/road labels — more "in-depth" than the no-labels variant.
   const tiles = isDark
-    ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
+    ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
   L.tileLayer(tiles, {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: "abcd",
-    maxZoom: 10,
+    maxZoom: 12,
   }).addTo(map);
 
   // India outline overlay (fail-soft).
@@ -412,6 +447,11 @@ function updateMarker(id, data) {
   const city = state.cities.find(c => c.id === id);
   const name = city?.name || "";
   const temp = t == null ? "—" : Math.round(t) + "°";
-  const html = `<div class="city-pin ${sym}"><div class="bubble"><span class="dot"></span>${temp} ${name}</div><div class="stem"></div></div>`;
+  const active = state.selected === id ? " active" : "";
+  const html = `<div class="city-pin ${sym}${active}"><div class="bubble"><span class="dot"></span>${temp} ${name}</div><div class="stem"></div></div>`;
   m.setIcon(L.divIcon({ html, className: "city-pin-wrap", iconSize: [0, 0] }));
+}
+
+function refreshAllMarkers() {
+  state.cache.forEach((data, id) => updateMarker(id, data));
 }
