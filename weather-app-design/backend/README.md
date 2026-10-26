@@ -40,6 +40,16 @@ backend/
       imd.py                 # stub until IMD approves access
 ```
 
+## Production
+
+In production use gunicorn, not `python run.py`:
+
+```
+gunicorn --workers 2 --bind 0.0.0.0:$PORT "app:create_app()"
+```
+
+See `../DEPLOY.md` for the Render blueprint we use.
+
 ## Credit
 
 Data is from MET Norway (CC BY 4.0) and IMD. The web page shows the

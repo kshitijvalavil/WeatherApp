@@ -1,0 +1,18 @@
+# Render blueprint for the Mausam weather app.
+# Point Render at this repo and it reads this file to create the service.
+# See https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: mausam
+    runtime: python
+    plan: free
+    region: singapore            # closest to India; change if you prefer
+    rootDir: weather-app-design/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --bind 0.0.0.0:$PORT "app:create_app()"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.5
