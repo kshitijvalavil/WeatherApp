@@ -121,7 +121,7 @@ async function select(id, { fly = true } = {}) {
   });
   updateMarkers();
   const city = state.cities.find((c) => c.id === id);
-  if (fly && state.map && city) state.map.flyTo([city.lat, city.lon], Math.max(state.map.getZoom(), 5), { duration: 0.9 });
+  if (fly && state.map && city) state.map.flyTo({ center: [city.lon, city.lat], zoom: Math.max(state.map.getZoom(), 4.5), duration: reduceMotion ? 0 : 900, essential: true });
 
   const body = $("heroBody");
   body.classList.add("swap");
@@ -353,7 +353,7 @@ function renderHourly(data) {
     el.style.animationDelay = `${i * 25}ms`;
     const night = isNightAt(data, new Date(h.time));
     const icon = nightIcon(h.symbol || "cloudy", night);
-    const rain = h.rain_mm && h.rain_mm >= 0.1 ? `${h.rain_mm.toFixed(1)} mm` : "";
+    const rain = h.rain_prob != null ? (h.rain_prob >= 20 ? `${Math.round(h.rain_prob / 10) * 10}%` : "") : h.rain_mm && h.rain_mm >= 0.1 ? `${h.rain_mm.toFixed(1)} mm` : "";
     el.innerHTML = `<div class="h">${i === 0 ? "Now" : fmtHour.format(new Date(h.time))}</div><svg aria-hidden="true"><use href="#i-${icon}"/></svg><div class="t">${h.temp_c == null ? "--" : Math.round(h.temp_c) + "°"}</div><div class="p">${rain}</div>`;
     host.appendChild(el);
   });
@@ -405,19 +405,16 @@ function renderWeek(data) {
   const lo = Math.min(...days.map((d) => d.lo_c));
   const hi = Math.max(...days.map((d) => d.hi_c));
   const span = Math.max(1, hi - lo);
-  const nowT = data.current.temp_c;
   days.forEach((d, i) => {
     const li = document.createElement("li");
     li.style.animationDelay = `${i * 45}ms`;
     const left = ((d.lo_c - lo) / span) * 100;
     const width = Math.max(4, ((d.hi_c - d.lo_c) / span) * 100);
-    const rain = d.rain_mm >= 1 ? `<small>${Math.round(d.rain_mm)} mm</small>` : "";
-    const nowDot = i === 0 && nowT != null ? `<i class="now" style="left:${Math.min(100, Math.max(0, ((nowT - lo) / span) * 100))}%"></i>` : "";
     li.innerHTML = `
       <span class="d">${i === 0 ? "Today" : fmtDay.format(new Date(`${d.date}T12:00:00+05:30`))}</span>
-      <span class="icw"><svg aria-hidden="true"><use href="#i-${d.symbol || "cloudy"}"/></svg>${rain}</span>
+      <span class="icw"><svg aria-hidden="true"><use href="#i-${d.symbol || "cloudy"}"/></svg></span>
       <span class="lo">${Math.round(d.lo_c)}°</span>
-      <span class="bar"><span class="r" style="left:${left}%;width:${width}%;background:linear-gradient(90deg,${tempColor(d.lo_c)},${tempColor(d.hi_c)});animation-delay:${i * 45 + 150}ms"></span>${nowDot}</span>
+      <span class="bar"><span class="r" style="left:${left}%;width:${width}%;background:linear-gradient(90deg,${tempColor(d.lo_c)},${tempColor(d.hi_c)});animation-delay:${i * 45 + 150}ms"></span></span>
       <span class="hi">${Math.round(d.hi_c)}°</span>`;
     host.appendChild(li);
   });
@@ -428,10 +425,14 @@ function renderTiles(data) {
   const c = data.current;
 
   const uv = c.uv_index == null ? null : Math.round(c.uv_index);
+  const peak = c.uv_peak && c.uv_peak.value != null ? { v: Math.round(c.uv_peak.value), t: new Date(c.uv_peak.time) } : null;
   $("uvVal").textContent = uv ?? "--";
-  $("uvLabel").textContent = uv == null ? "" : uvLabel(uv);
-  $("uvDot").style.left = uv == null ? "0%" : `${Math.min(100, (uv / 11) * 100)}%`;
-  $("uvCap").textContent = uv == null ? "No UV reading right now." : uvCaption(uv);
+  $("uvLabel").textContent = uv == null ? "Not available" : uvLabel(uv);
+  $("uvDot").hidden = uv == null;
+  $("uvDot").style.left = `${Math.min(100, ((uv ?? 0) / 11) * 100)}%`;
+  if (uv == null) $("uvCap").textContent = "MET Norway didn't send a UV reading.";
+  else if (peak && peak.v > uv) $("uvCap").textContent = `Peaks at ${peak.v} (${uvLabel(peak.v).toLowerCase()}) around ${fmtHour.format(peak.t)}.`;
+  else $("uvCap").textContent = uvCaption(uv);
 
   $("windVal").textContent = c.wind_kmh == null ? "--" : Math.round(c.wind_kmh);
   $("windSub").textContent = c.wind_dir == null ? "" : `From the ${compassName(c.wind_dir)}`;
@@ -541,83 +542,90 @@ function buildCompassTicks() {
   g.innerHTML = s;
 }
 
-// ---------- Map ----------
-let tileLayer = null;
+// ---------- Map (MapLibre + OpenFreeMap: free, no key, no limits) ----------
+const STYLE = { light: "https://tiles.openfreemap.org/styles/positron", dark: "https://tiles.openfreemap.org/styles/dark" };
+const NAMES_ZOOM = 4.75;
+
 function initMap() {
-  const map = L.map("map", { zoomControl: true, scrollWheelZoom: false, attributionControl: true, zoomSnap: 0.25, minZoom: 4, maxZoom: 11 });
+  const bounds = new maplibregl.LngLatBounds();
+  state.cities.forEach((c) => bounds.extend([c.lon, c.lat]));
+  const map = new maplibregl.Map({
+    container: "map",
+    style: prefersDark.matches ? STYLE.dark : STYLE.light,
+    bounds,
+    fitBoundsOptions: { padding: 36 },
+    minZoom: 3,
+    maxZoom: 10,
+    attributionControl: { compact: true },
+    dragRotate: false,
+    pitchWithRotate: false,
+    scrollZoom: false,
+  });
+  map.touchZoomRotate.disableRotation();
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
   state.map = map;
-  setTiles();
-  prefersDark.addEventListener?.("change", setTiles);
-  map.fitBounds(L.latLngBounds(state.cities.map((c) => [c.lat, c.lon])), { padding: [24, 24] });
-  map.on("zoomend", () => { map.getContainer().classList.toggle("map-names", map.getZoom() >= 5.75); declutter(); });
+
+  map.getContainer().addEventListener("click", () => map.scrollZoom.enable(), { once: true });
+  map.on("zoom", () => map.getContainer().classList.toggle("map-names", map.getZoom() >= NAMES_ZOOM));
+  map.on("zoomend", declutter);
   map.on("moveend", declutter);
-  map.getContainer().addEventListener("click", () => map.scrollWheelZoom.enable(), { once: true });
+  map.on("style.load", () => { $("mapNote").hidden = true; if (Radar.frames.length) addRadarLayers(); });
+  map.on("error", (e) => {
+    if (!map.isStyleLoaded() && e && e.error) $("mapNote").hidden = false;
+  });
+  prefersDark.addEventListener?.("change", () => map.setStyle(prefersDark.matches ? STYLE.dark : STYLE.light));
 
   state.cities.forEach((c) => {
-    const m = L.marker([c.lat, c.lon], { icon: pinIcon(c, null, false), keyboard: true, title: c.name, riseOnHover: true });
-    m.on("click", () => select(c.id));
-    m.addTo(map);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "pin-wrap";
+    el.setAttribute("aria-label", c.name);
+    el.addEventListener("click", (e) => { e.stopPropagation(); select(c.id); });
+    const m = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([c.lon, c.lat]).addTo(map);
     state.markers.set(c.id, m);
   });
-  new ResizeObserver(() => map.invalidateSize()).observe($("map"));
-}
-
-function setTiles() {
-  const dark = prefersDark.matches;
-  if (tileLayer) tileLayer.remove();
-  tileLayer = L.tileLayer(`https://{s}.basemaps.cartocdn.com/rastertiles/${dark ? "dark_all" : "voyager"}/{z}/{x}/{y}{r}.png`, {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: "abcd",
-    maxZoom: 19,
-  }).addTo(state.map);
-  tileLayer.bringToBack();
-}
-
-function pinIcon(c, s, active) {
-  const t = s && s.temp_c != null ? Math.round(s.temp_c) : null;
-  const color = t == null ? "#c7ccd3" : tempColor(t);
-  const html = `<div class="pin${active ? " active" : ""}"><div class="b"><span class="sw" style="background:${color}"></span>${t == null ? "--" : t + "°"}<span class="n">${c.name}</span></div></div>`;
-  return L.divIcon({ html, className: `pin-wrap${active ? " active" : ""}`, iconSize: [0, 0] });
+  new ResizeObserver(() => map.resize()).observe($("map"));
+  updateMarkers();
 }
 
 function updateMarkers() {
   state.markers.forEach((m, id) => {
     const c = state.cities.find((x) => x.id === id);
+    const s = state.summary.get(id);
     const active = id === state.selected;
-    m.setIcon(pinIcon(c, state.summary.get(id), active));
-    m.setZIndexOffset(active ? 1000 : 0);
+    const t = s && s.temp_c != null ? Math.round(s.temp_c) : null;
+    const el = m.getElement();
+    el.classList.toggle("active", active);
+    el.innerHTML = `<span class="pin${active ? " active" : ""}"><span class="b"><span class="sw" style="background:${t == null ? "#c7ccd3" : tempColor(t)}"></span>${t == null ? "--" : t + "°"}<span class="n">${c.name}</span></span></span>`;
   });
   declutter();
 }
 
-// Hide pins that would overlap a more important one; the cities list is ordered big metros first.
+// Hide pins that would overlap a more important one; the city list is ordered big metros first.
 function declutter() {
   const map = state.map;
   if (!map) return;
-  const named = map.getZoom() >= 5.75;
+  const named = map.getZoom() >= NAMES_ZOOM;
   const placed = [];
   const order = [state.selected, ...state.cities.map((c) => c.id).filter((id) => id !== state.selected)];
   order.forEach((id) => {
     const m = state.markers.get(id);
-    const el = m && m.getElement();
-    if (!el) return;
+    if (!m) return;
     const c = state.cities.find((x) => x.id === id);
-    const p = map.latLngToContainerPoint(m.getLatLng());
+    const p = map.project(m.getLngLat());
     const w = 56 + (named || id === state.selected ? c.name.length * 7 + 6 : 0);
     const box = { x1: p.x - w / 2 - 3, x2: p.x + w / 2 + 3, y1: p.y - 15, y2: p.y + 15 };
     const hit = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1);
-    el.style.visibility = hit ? "hidden" : "";
+    m.getElement().style.visibility = hit ? "hidden" : "";
     if (!hit) placed.push(box);
   });
 }
 
 // ---------- Rain radar (RainViewer, free, no key) ----------
-const Radar = { frames: [], layers: [], i: 0, timer: 0, playing: true, ready: false };
+const Radar = { frames: [], host: "", i: 0, timer: 0, playing: true, ready: false };
 
 function wireLayerToggle() {
-  document.querySelectorAll(".seg button").forEach((b) => {
-    b.addEventListener("click", () => setLayer(b.dataset.layer));
-  });
+  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => setLayer(b.dataset.layer)));
   $("radarPlay").addEventListener("click", () => {
     Radar.playing = !Radar.playing;
     $("radarPlay").innerHTML = Radar.playing ? '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7Z" fill="#fff" stroke="none"/></svg>';
@@ -633,10 +641,7 @@ async function setLayer(layer) {
   if (layer === "radar") {
     legend.innerHTML = '<span>Light</span><span class="legend-bar rain"></span><span>Heavy</span>';
     if (!Radar.ready) await loadRadar();
-    if (!Radar.frames.length) {
-      legend.innerHTML = "<span>Radar is unavailable right now</span>";
-      return;
-    }
+    if (!Radar.frames.length) { legend.innerHTML = "<span>Radar is unavailable right now</span>"; return; }
     $("radarBar").hidden = false;
     showFrame(Radar.frames.length - 1);
     if (Radar.playing) playRadar();
@@ -644,7 +649,7 @@ async function setLayer(layer) {
     legend.innerHTML = '<span>10°</span><span class="legend-bar temp"></span><span>40°</span>';
     $("radarBar").hidden = true;
     clearInterval(Radar.timer);
-    Radar.layers.forEach((l) => l.setOpacity(0));
+    showFrame(-1);
   }
 }
 
@@ -652,17 +657,30 @@ async function loadRadar() {
   Radar.ready = true;
   try {
     const d = await getJSON("https://api.rainviewer.com/public/weather-maps.json");
+    Radar.host = d.host;
     Radar.frames = (d.radar && d.radar.past) || [];
-    Radar.layers = Radar.frames.map((f) =>
-      L.tileLayer(`${d.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0, maxNativeZoom: 7, maxZoom: 11, zIndex: 300, attribution: 'Radar &copy; <a href="https://www.rainviewer.com/">RainViewer</a>' }).addTo(state.map)
-    );
+    if (state.map.isStyleLoaded()) addRadarLayers();
   } catch {
     Radar.frames = [];
   }
 }
 
+function addRadarLayers() {
+  const map = state.map;
+  const firstLabel = (map.getStyle().layers || []).find((l) => l.type === "symbol");
+  Radar.frames.forEach((f, i) => {
+    const id = `radar-${i}`;
+    if (map.getSource(id)) return;
+    map.addSource(id, { type: "raster", tiles: [`${Radar.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`], tileSize: 256, maxzoom: 7, attribution: '<a href="https://www.rainviewer.com/">RainViewer</a>' });
+    map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 300 }, "raster-fade-duration": 0 } }, firstLabel && firstLabel.id);
+  });
+  if (state.layer === "radar") showFrame(Radar.i);
+}
+
 function showFrame(i) {
-  Radar.layers.forEach((l, j) => l.setOpacity(j === i ? 0.75 : 0));
+  const map = state.map;
+  Radar.frames.forEach((_, j) => { if (map.getLayer(`radar-${j}`)) map.setPaintProperty(`radar-${j}`, "raster-opacity", j === i ? 0.75 : 0); });
+  if (i < 0) return;
   Radar.i = i;
   const f = Radar.frames[i];
   $("radarTime").textContent = f ? fmtTime.format(new Date(f.time * 1000)) : "--";
@@ -672,9 +690,5 @@ function showFrame(i) {
 function playRadar() {
   clearInterval(Radar.timer);
   if (reduceMotion) return;
-  Radar.timer = setInterval(() => {
-    if (state.layer !== "radar") return;
-    const next = (Radar.i + 1) % Radar.frames.length;
-    showFrame(next);
-  }, 700);
+  Radar.timer = setInterval(() => { if (state.layer === "radar") showFrame((Radar.i + 1) % Radar.frames.length); }, 700);
 }

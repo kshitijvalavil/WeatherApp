@@ -251,6 +251,7 @@ svg { display: block; }
 @keyframes hazeShift { from { transform: translateX(-3%); } to { transform: translateX(3%); } }
 
 .sky-rain { inset: 0; width: 100%; height: 100%; }
+.sky::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--sky-top) 0%, color-mix(in srgb, var(--sky-top) 55%, transparent) 38%, transparent 62%); opacity: .8; }
 .sky-flash { inset: 0; background: radial-gradient(ellipse at 30% 0%, rgba(255,255,255,.9), rgba(220,230,255,.35) 60%, transparent); opacity: 0; }
 .sky-flash.on { animation: flash .9s ease-out; }
 @keyframes flash { 0% { opacity: 0; } 8% { opacity: .85; } 16% { opacity: .1; } 26% { opacity: .6; } 100% { opacity: 0; } }
@@ -318,15 +319,20 @@ svg { display: block; }
 .seg button.on { background: var(--card-solid); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .seg button[disabled] { opacity: .4; cursor: default; }
 .map-wrap { position: relative; flex: 1; min-height: 420px; border-top: 1px solid var(--stroke); }
-#map { position: absolute; inset: 0; background: #e8eef3; }
+#map { position: absolute; inset: 0; background: #e9edf1; }
 @media (prefers-color-scheme: dark) { #map { background: #1b1f27; } }
-.leaflet-container { font-family: var(--font); }
-.leaflet-control-zoom { border: 0 !important; box-shadow: var(--shadow) !important; border-radius: 10px !important; overflow: hidden; }
-.leaflet-control-zoom a { background: var(--card-solid) !important; color: var(--text) !important; border-color: var(--stroke) !important; }
-.leaflet-control-attribution { background: rgba(255,255,255,.7) !important; border-radius: 6px 0 0 0; font-size: 10px; }
-
+.maplibregl-map { font-family: var(--font); }
+.maplibregl-ctrl-group { border-radius: 10px !important; box-shadow: var(--shadow) !important; overflow: hidden; background: var(--card-solid) !important; }
+.maplibregl-ctrl-group button + button { border-top-color: var(--stroke) !important; }
+@media (prefers-color-scheme: dark) { .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); } }
+.maplibregl-ctrl-attrib { font-size: 10px; }
+.map-note {
+  position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 8px 12px; border-radius: 10px; background: var(--card-solid); box-shadow: var(--shadow);
+  font-size: 12px; color: var(--text-2); pointer-events: none;
+}
 .map-legend, .radar-bar {
-  position: absolute; z-index: 500; left: 12px; bottom: 12px;
+  position: absolute; z-index: 2; left: 12px; bottom: 12px;
   display: flex; align-items: center; gap: 8px;
   padding: 7px 11px; border-radius: 11px;
   background: var(--card); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
@@ -342,7 +348,7 @@ svg { display: block; }
 .radar-track { width: 90px; height: 4px; border-radius: 99px; background: var(--track); overflow: hidden; }
 .radar-fill { height: 100%; width: 0; background: var(--accent); transition: width .5s linear; }
 
-.pin { display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); cursor: pointer; }
+.pin { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
 .pin .b {
   display: flex; align-items: center; gap: 5px;
   padding: 3px 8px 3px 3px; border-radius: 99px;
@@ -359,15 +365,18 @@ svg { display: block; }
 .pin:hover .b { transform: scale(1.08); }
 .pin.active .b { background: var(--accent); color: #fff; border-color: transparent; transform: scale(1.12); box-shadow: 0 0 0 6px rgba(10,122,255,.22), 0 6px 16px rgba(10,122,255,.4); }
 .pin.active .n { color: rgba(255,255,255,.85); }
-.pin-wrap { background: none !important; border: 0 !important; }
-.pin-wrap.active { z-index: 1000 !important; }
+.pin-wrap { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.pin-wrap.active { z-index: 5; }
+.pin-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 99px; }
 @keyframes pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
 
 /* ---------- 10-day ---------- */
 .week { padding: 18px 18px 8px; }
+.week .card-title { margin-bottom: 4px; }
+.week-hint { margin: 0 0 8px; font-size: 12px; color: var(--text-3); }
 .week ul { list-style: none; margin: 0; padding: 0; }
 .week li {
-  display: grid; grid-template-columns: 52px 34px 34px minmax(40px, 1fr) 34px;
+  display: grid; grid-template-columns: 52px 30px 34px minmax(40px, 1fr) 34px;
   align-items: center; gap: 10px;
   padding: 9px 4px; border-top: 1px solid var(--stroke);
   font-variant-numeric: tabular-nums;
@@ -377,15 +386,13 @@ svg { display: block; }
 .week .d { font-size: 15px; font-weight: 600; }
 .week .icw { display: flex; flex-direction: column; align-items: center; }
 .week .icw svg { width: 28px; height: 28px; }
-.week .icw small { font-size: 10px; font-weight: 700; color: #2f8cff; line-height: 1; margin-top: -1px; white-space: nowrap; }
 .week .lo { text-align: right; color: var(--text-3); font-size: 15px; font-weight: 500; }
 .week .hi { font-size: 15px; font-weight: 600; }
-.bar { position: relative; height: 5px; border-radius: 99px; background: var(--track); }
+.bar { position: relative; height: 6px; border-radius: 99px; background: var(--track); }
 .bar .r {
   position: absolute; top: 0; bottom: 0; border-radius: 99px;
   transform-origin: left; animation: grow .9s var(--ease) both;
 }
-.bar .now { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--card-solid), 0 1px 3px rgba(0,0,0,.3); }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 /* ---------- Tiles ---------- */
@@ -479,7 +486,7 @@ svg { display: block; }
   .map-card { min-height: 400px; }
   .map-wrap { min-height: 340px; }
   .map-head { flex-wrap: wrap; }
-  .week li { grid-template-columns: 44px 38px 28px minmax(30px, 1fr) 30px; gap: 8px; }
+  .week li { grid-template-columns: 44px 28px 28px minmax(30px, 1fr) 30px; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
