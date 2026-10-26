@@ -63,6 +63,11 @@ def _get(url: str, params: dict | None = None) -> dict:
     expires = _parse_expires(r.headers.get("Expires")) or (now + 300)
 
     with _lock:
+        # Visitors' own locations add new keys; keep memory bounded by
+        # dropping the oldest entries once we hold a few hundred forecasts.
+        if len(_cache) > 300:
+            for k in sorted(_cache, key=lambda k: _cache[k]["expires"])[:100]:
+                del _cache[k]
         _cache[key] = {
             "expires": expires,
             "last_modified": r.headers.get("Last-Modified"),
@@ -103,9 +108,25 @@ def sunrise(lat: float, lon: float, date: str) -> dict:
 
 # ---------- Helpers that pull the bits we care about ----------
 
-def current(forecast: dict) -> dict:
-    """The first hour of the forecast — treated as 'right now'."""
+def upcoming(forecast: dict) -> list[dict]:
+    """The timeseries from the hour we're in now onwards.
+
+    MET Norway's cached feed can start an hour or two in the past, so the
+    first row isn't always "now". Each row covers the hour after its time.
+    """
     series = forecast["properties"]["timeseries"]
+    cutoff = datetime.now(timezone.utc).timestamp() - 3600
+    rows = [r for r in series if _ts(r["time"]) > cutoff]
+    return rows or series[-1:]
+
+
+def _ts(iso: str) -> float:
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+
+
+def current(forecast: dict) -> dict:
+    """The forecast row for the hour we're in — treated as 'right now'."""
+    series = upcoming(forecast)
     if not series:
         return {}
     first = series[0]
@@ -208,8 +229,8 @@ def visibility_km(current_dict: dict) -> float | None:
 
 
 def hourly(forecast: dict, hours: int = 12) -> list[dict]:
-    """A short list of upcoming hours."""
-    series = forecast["properties"]["timeseries"][:hours]
+    """A short list of upcoming hours, starting with the current one."""
+    series = upcoming(forecast)[:hours]
     out = []
     for row in series:
         details = row["data"]["instant"]["details"]
@@ -220,16 +241,25 @@ def hourly(forecast: dict, hours: int = 12) -> list[dict]:
             "symbol": one.get("summary", {}).get("symbol_code"),
             "rain_mm": one.get("details", {}).get("precipitation_amount"),
             "rain_prob": one.get("details", {}).get("probability_of_precipitation"),
+            "uv": details.get("ultraviolet_index_clear_sky"),
         })
     return out
 
 
-def uv_peak(forecast: dict, hours: int = 24) -> dict | None:
-    """Highest clear-sky UV index in the next `hours`, and when it happens."""
+def uv_peak(forecast: dict) -> dict | None:
+    """The highest UV of today's daylight, or tomorrow's if the sun is down.
+
+    Walks forward from now and stops once a stretch of daylight (UV above
+    zero) has ended, so at 3 PM it reports this afternoon, not tomorrow noon.
+    """
     best = None
-    for row in forecast["properties"]["timeseries"][:hours]:
+    for row in upcoming(forecast)[:30]:
         uv = row["data"]["instant"]["details"].get("ultraviolet_index_clear_sky")
-        if uv is not None and (best is None or uv > best["value"]):
+        if uv is None:
+            continue
+        if uv <= 0.05 and best and best["value"] > 0.05:
+            break
+        if best is None or uv > best["value"]:
             best = {"value": uv, "time": row["time"]}
     return best
 

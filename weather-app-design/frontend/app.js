@@ -2,7 +2,7 @@
 
 const IST = "Asia/Kolkata";
 const fmtTime = new Intl.DateTimeFormat("en-US", { timeZone: IST, hour: "numeric", minute: "2-digit", hour12: true });
-const fmtHour = new Intl.DateTimeFormat("en-US", { timeZone: IST, hour: "numeric", hour12: true });
+const fmtKey = new Intl.DateTimeFormat("en-CA", { timeZone: IST, year: "numeric", month: "2-digit", day: "2-digit" });
 const fmtDay = new Intl.DateTimeFormat("en-US", { timeZone: IST, weekday: "short" });
 const fmtDate = new Intl.DateTimeFormat("en-US", { timeZone: IST, weekday: "long", day: "numeric", month: "long" });
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -15,6 +15,7 @@ const state = {
   summary: new Map(),
   detail: new Map(),
   selected: null,
+  place: null, // a spot that isn't one of our cities: your location, or a searched town
   map: null,
   markers: new Map(),
   layer: "temp",
@@ -36,18 +37,24 @@ async function init() {
   initMap();
   buildCompassTicks();
   wireSearch();
+  wireLocate();
   wireLayerToggle();
 
   const fromHash = decodeURIComponent(location.hash.slice(1));
-  const start = state.cities.find((c) => c.id === fromHash) || state.cities.find((c) => c.id === "mumbai") || state.cities[0];
+  const linked = fromHash.startsWith("@") ? placeFromId(fromHash) : null;
+  if (linked) setPlace(linked);
+  const start = linked || state.cities.find((c) => c.id === fromHash) || state.cities.find((c) => c.id === "mumbai") || state.cities[0];
   select(start.id, { fly: false });
+  if (!fromHash) autoLocate(start.id);
 
   loadSummary();
   setInterval(loadSummary, 10 * 60 * 1000);
   setInterval(tick, 30 * 1000);
   window.addEventListener("hashchange", () => {
     const id = decodeURIComponent(location.hash.slice(1));
-    if (id && id !== state.selected && state.cities.some((c) => c.id === id)) select(id);
+    if (!id || id === state.selected) return;
+    if (id.startsWith("@") && placeFromId(id)) { setPlace(placeFromId(id)); select(id); }
+    else if (state.cities.some((c) => c.id === id)) select(id);
   });
 }
 
@@ -92,21 +99,191 @@ function updateCityList() {
     const s = state.summary.get(el.dataset.id);
     if (!s) return;
     el.querySelector(".t").textContent = s.temp_c == null ? "--" : `${Math.round(s.temp_c)}°`;
-    el.querySelector(".ic").innerHTML = s.symbol ? `<use href="#i-${s.symbol}"/>` : "";
+    el.querySelector(".ic").innerHTML = s.symbol ? `<use href="#i-${nightIcon(s.symbol, roughlyNight())}"/>` : "";
   });
 }
 
 function wireSearch() {
   const input = $("searchInput");
+  let timer = 0;
   input.addEventListener("input", () => {
     const q = input.value.trim().toLowerCase();
-    document.querySelectorAll(".city").forEach((el) => { el.hidden = q && !el.dataset.q.includes(q); });
+    document.querySelectorAll(".city:not(.place)").forEach((el) => { el.hidden = q && !el.dataset.q.includes(q); });
+    clearTimeout(timer);
+    if (q.length >= 2) timer = setTimeout(() => searchPlaces(q), 300);
+    else showPlaces(null);
   });
   input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { clearSearch(); return; }
     if (e.key !== "Enter") return;
-    const first = [...document.querySelectorAll(".city")].find((el) => !el.hidden);
-    if (first) { select(first.dataset.id); input.blur(); }
+    const first = [...document.querySelectorAll(".city:not(.place), .hit")].find((el) => !el.hidden);
+    if (first) { first.click(); input.blur(); }
   });
+}
+
+function clearSearch() {
+  $("searchInput").value = "";
+  document.querySelectorAll(".city").forEach((el) => { el.hidden = false; });
+  showPlaces(null);
+}
+
+// Towns beyond our 33 cities, from Open-Meteo's place search (via our server).
+let searchSeq = 0;
+async function searchPlaces(q) {
+  const seq = ++searchSeq;
+  let places = [];
+  try { ({ places } = await getJSON(`/api/places?q=${encodeURIComponent(q)}`)); } catch { /* shown as no results */ }
+  if (seq !== searchSeq) return;
+  const ours = new Set(state.cities.map((c) => c.name.toLowerCase()));
+  showPlaces(places.filter((p) => !ours.has(p.name.toLowerCase())), q);
+}
+
+function showPlaces(places, q) {
+  const host = $("placeResults");
+  host.innerHTML = "";
+  if (!places) { host.hidden = true; return; }
+  const anyCity = [...document.querySelectorAll(".city:not(.place)")].some((el) => !el.hidden);
+  if (!places.length && anyCity) { host.hidden = true; return; }
+  host.hidden = false;
+  if (!places.length) {
+    host.innerHTML = `<p class="hits-empty"></p>`;
+    host.firstChild.textContent = `No places called "${q}". Try a nearby town, or use your location.`;
+    return;
+  }
+  const head = document.createElement("div");
+  head.className = "hits-head";
+  head.textContent = "More places";
+  host.appendChild(head);
+  places.forEach((p) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "hit";
+    b.innerHTML = `<svg aria-hidden="true"><use href="#i-pin"/></svg><span class="name"></span><span class="state"></span>`;
+    b.querySelector(".name").textContent = p.name;
+    b.querySelector(".state").textContent = p.state;
+    b.addEventListener("click", () => {
+      const place = { ...p, id: placeId(p.lat, p.lon) };
+      setPlace(place);
+      clearSearch();
+      select(place.id);
+    });
+    host.appendChild(b);
+  });
+}
+
+// ---------- Places that aren't in our city list ----------
+function placeId(lat, lon) { return `@${(+lat).toFixed(2)},${(+lon).toFixed(2)}`; }
+
+function placeFromId(id) {
+  const m = /^@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(id);
+  if (!m) return null;
+  const lat = +m[1], lon = +m[2];
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { id: placeId(lat, lon), lat, lon, name: "Loading…", state: "" };
+}
+
+function findPlace(id) {
+  return state.cities.find((c) => c.id === id) || (state.place && state.place.id === id ? state.place : null);
+}
+
+// Only one extra place at a time: it gets a row at the top of the list and a pin on the map.
+function setPlace(place) {
+  const old = state.place;
+  if (old && old.id !== place.id && state.markers.has(old.id)) {
+    state.markers.get(old.id).remove();
+    state.markers.delete(old.id);
+  }
+  state.place = { ...(old && old.id === place.id ? old : {}), ...place };
+  renderPlaceRow();
+  if (state.map && !state.markers.has(place.id)) addMarker(state.place);
+}
+
+function renderPlaceRow() {
+  const p = state.place;
+  let row = $("placeRow");
+  if (!p) { if (row) row.remove(); return; }
+  if (!row) {
+    row = document.createElement("button");
+    row.type = "button";
+    row.id = "placeRow";
+    row.className = "city place";
+    row.innerHTML = `<span class="meta"><span class="name"></span><span class="state"></span></span><svg class="ic" aria-hidden="true"></svg><span class="t">--</span>`;
+    row.addEventListener("click", () => select(state.place.id));
+    $("cityList").prepend(row);
+  }
+  row.dataset.id = p.id;
+  row.querySelector(".name").innerHTML = p.here ? `<svg class="loc" aria-hidden="true"><use href="#i-locate"/></svg>` : "";
+  row.querySelector(".name").append(p.name);
+  row.querySelector(".state").textContent = p.here ? "Your location" : p.state;
+  updateCityList();
+}
+
+// ---------- Your location ----------
+function wireLocate() {
+  const btn = $("locateBtn");
+  if (!("geolocation" in navigator)) { btn.hidden = true; return; }
+  btn.addEventListener("click", () => locate({ manual: true }));
+}
+
+// Find the visitor on first load, unless they've said no before.
+async function autoLocate(startId) {
+  if (!("geolocation" in navigator)) return;
+  let permission = "prompt";
+  try { permission = (await navigator.permissions.query({ name: "geolocation" })).state; } catch { /* older Safari */ }
+  if (permission !== "denied") locate({ manual: false, startId });
+}
+
+function locate({ manual, startId }) {
+  const btn = $("locateBtn"), msg = $("locateMsg");
+  btn.classList.add("busy");
+  btn.setAttribute("aria-busy", "true");
+  $("locateText").textContent = "Finding you…";
+  msg.hidden = true;
+  const done = () => {
+    btn.classList.remove("busy");
+    btn.removeAttribute("aria-busy");
+    $("locateText").textContent = "Use my location";
+  };
+  navigator.geolocation.getCurrentPosition((pos) => {
+    done();
+    const { latitude: lat, longitude: lon } = pos.coords;
+    const id = placeId(lat, lon);
+    setPlace({ id, lat: +lat.toFixed(2), lon: +lon.toFixed(2), name: "Your location", state: "", here: true });
+    // On first load, don't yank the page away if they've already picked a city.
+    if (manual || state.selected === startId) select(id);
+    else prefetch(id);
+  }, (err) => {
+    done();
+    if (!manual) return;
+    msg.hidden = false;
+    msg.textContent = err.code === err.PERMISSION_DENIED
+      ? "Location is blocked for this site. Allow it in your browser's site settings, or search for your town."
+      : "Couldn't find your location just now. Try again, or search for your town.";
+  }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 10 * 60 * 1000 });
+}
+
+function weatherUrl(id) {
+  const p = id.startsWith("@") ? findPlace(id) : null;
+  return p ? `/api/weather?lat=${p.lat}&lon=${p.lon}` : `/api/weather?city=${encodeURIComponent(id)}`;
+}
+
+async function fetchDetail(id) {
+  let data = state.detail.get(id);
+  if (data) return data;
+  data = await getJSON(weatherUrl(id));
+  state.detail.set(id, data);
+  setTimeout(() => state.detail.delete(id), 10 * 60 * 1000);
+  if (state.place && state.place.id === id) {
+    state.place.name = data.city.name;
+    state.place.state = data.city.state;
+    renderPlaceRow();
+  }
+  state.summary.set(id, { id, temp_c: data.current.temp_c, symbol: data.current.symbol });
+  return data;
+}
+
+async function prefetch(id) {
+  try { await fetchDetail(id); updateCityList(); updateMarkers(); } catch { /* the row stays at -- */ }
 }
 
 // ---------- Selection ----------
@@ -120,25 +297,21 @@ async function select(id, { fly = true } = {}) {
     if (on && window.innerWidth <= 900) el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
   });
   updateMarkers();
-  const city = state.cities.find((c) => c.id === id);
+  const city = findPlace(id);
   if (fly && state.map && city) state.map.flyTo({ center: [city.lon, city.lat], zoom: Math.max(state.map.getZoom(), 4.5), duration: reduceMotion ? 0 : 900, essential: true });
 
   const body = $("heroBody");
   body.classList.add("swap");
-  let data = state.detail.get(id);
-  if (!data) {
-    try {
-      data = await getJSON(`/api/weather?city=${encodeURIComponent(id)}`);
-      state.detail.set(id, data);
-      setTimeout(() => state.detail.delete(id), 10 * 60 * 1000);
-    } catch {
-      body.classList.remove("swap");
-      $("heroSentence").textContent = "Couldn't load this city's weather. Try again in a minute.";
-      return;
-    }
+  let data;
+  try {
+    data = await fetchDetail(id);
+  } catch {
+    if (state.selected !== id) return;
+    body.classList.remove("swap");
+    $("heroSentence").textContent = "Couldn't load the weather for this place. Try again in a minute.";
+    return;
   }
   if (state.selected !== id) return;
-  state.summary.set(id, { id, temp_c: data.current.temp_c, symbol: data.current.symbol });
   updateCityList();
   updateMarkers();
 
@@ -204,7 +377,7 @@ function sentence(data) {
   if (!hours.length) return "";
   const wet = (h) => (h.rain_mm || 0) >= 0.1 || h.symbol === "rain" || h.symbol === "thunder";
   const nowWet = wet(hours[0]);
-  const at = (h) => fmtHour.format(new Date(h.time));
+  const at = (h) => fmtTime.format(new Date(h.time));
 
   if (nowWet) {
     const dry = hours.find((h, i) => i > 0 && !wet(h));
@@ -343,9 +516,10 @@ const Sky = (() => {
 // ---------- Hourly ----------
 function renderHourly(data) {
   const host = $("hourly");
-  const hours = (data.hourly || []).slice(0, 24);
+  // Each forecast hour covers the hour after its time; drop ones that have ended.
+  const hours = (data.hourly || []).filter((h) => new Date(h.time).getTime() > Date.now() - 3600e3).slice(0, 24);
   host.innerHTML = "";
-  host.style.gridTemplateColumns = `repeat(${hours.length}, 62px)`;
+  host.style.gridTemplateColumns = `repeat(${hours.length}, 70px)`;
   hours.forEach((h, i) => {
     const el = document.createElement("div");
     el.className = "hour" + (i === 0 ? " now" : "");
@@ -354,10 +528,16 @@ function renderHourly(data) {
     const night = isNightAt(data, new Date(h.time));
     const icon = nightIcon(h.symbol || "cloudy", night);
     const rain = h.rain_prob != null ? (h.rain_prob >= 20 ? `${Math.round(h.rain_prob / 10) * 10}%` : "") : h.rain_mm && h.rain_mm >= 0.1 ? `${h.rain_mm.toFixed(1)} mm` : "";
-    el.innerHTML = `<div class="h">${i === 0 ? "Now" : fmtHour.format(new Date(h.time))}</div><svg aria-hidden="true"><use href="#i-${icon}"/></svg><div class="t">${h.temp_c == null ? "--" : Math.round(h.temp_c) + "°"}</div><div class="p">${rain}</div>`;
+    el.innerHTML = `<div class="h">${i === 0 ? "Now" : fmtTime.format(new Date(h.time))}</div><svg aria-hidden="true"><use href="#i-${icon}"/></svg><div class="t">${h.temp_c == null ? "--" : Math.round(h.temp_c) + "°"}</div><div class="p">${rain}</div>`;
     host.appendChild(el);
   });
   host.appendChild(curve(hours));
+}
+
+// Good enough for list icons across India: dark before 6 AM and after 6 PM IST.
+function roughlyNight() {
+  const h = +new Intl.DateTimeFormat("en-US", { timeZone: IST, hour: "numeric", hourCycle: "h23" }).format(new Date());
+  return h < 6 || h >= 18;
 }
 
 function nightIcon(sym, night) {
@@ -424,15 +604,29 @@ function renderWeek(data) {
 function renderTiles(data) {
   const c = data.current;
 
-  const uv = c.uv_index == null ? null : Math.round(c.uv_index);
+  // MET Norway's UV is 0 whenever the sun is down. A 0 at 1 AM tells you
+  // nothing, so at night we show the coming day's peak instead.
+  const uvNow = c.uv_index == null ? null : Math.round(c.uv_index);
   const peak = c.uv_peak && c.uv_peak.value != null ? { v: Math.round(c.uv_peak.value), t: new Date(c.uv_peak.time) } : null;
+  const showPeak = uvNow != null && uvNow < 1 && peak && peak.v >= 1;
+  const uv = showPeak ? peak.v : uvNow;
   $("uvVal").textContent = uv ?? "--";
-  $("uvLabel").textContent = uv == null ? "Not available" : uvLabel(uv);
+  $("uvUnit").textContent = showPeak ? "peak" : "";
   $("uvDot").hidden = uv == null;
   $("uvDot").style.left = `${Math.min(100, ((uv ?? 0) / 11) * 100)}%`;
-  if (uv == null) $("uvCap").textContent = "MET Norway didn't send a UV reading.";
-  else if (peak && peak.v > uv) $("uvCap").textContent = `Peaks at ${peak.v} (${uvLabel(peak.v).toLowerCase()}) around ${fmtHour.format(peak.t)}.`;
-  else $("uvCap").textContent = uvCaption(uv);
+  if (uv == null) {
+    $("uvLabel").textContent = "Not available";
+    $("uvCap").textContent = "No UV reading for this place right now.";
+  } else if (showPeak) {
+    const day = fmtKey.format(peak.t) === fmtKey.format(new Date()) ? "Today" : "Tomorrow";
+    $("uvLabel").textContent = `${uvLabel(peak.v)} · ${day} ${fmtTime.format(peak.t)}`;
+    $("uvCap").textContent = `It's 0 now while the sun is down.`;
+  } else {
+    $("uvLabel").textContent = uvLabel(uv);
+    $("uvCap").textContent = peak && peak.v > uv
+      ? `Rising to ${peak.v} (${uvLabel(peak.v).toLowerCase()}) around ${fmtTime.format(peak.t)}.`
+      : uvCaption(uv);
+  }
 
   $("windVal").textContent = c.wind_kmh == null ? "--" : Math.round(c.wind_kmh);
   $("windSub").textContent = c.wind_dir == null ? "" : `From the ${compassName(c.wind_dir)}`;
@@ -575,28 +769,35 @@ function initMap() {
   });
   prefersDark.addEventListener?.("change", () => map.setStyle(prefersDark.matches ? STYLE.dark : STYLE.light));
 
-  state.cities.forEach((c) => {
-    const el = document.createElement("button");
-    el.type = "button";
-    el.className = "pin-wrap";
-    el.setAttribute("aria-label", c.name);
-    el.addEventListener("click", (e) => { e.stopPropagation(); select(c.id); });
-    const m = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([c.lon, c.lat]).addTo(map);
-    state.markers.set(c.id, m);
-  });
+  state.cities.forEach(addMarker);
+  if (state.place) addMarker(state.place);
   new ResizeObserver(() => map.resize()).observe($("map"));
   updateMarkers();
 }
 
+function addMarker(c) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "pin-wrap";
+  el.setAttribute("aria-label", c.name);
+  el.addEventListener("click", (e) => { e.stopPropagation(); select(c.id); });
+  const m = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([c.lon, c.lat]).addTo(state.map);
+  state.markers.set(c.id, m);
+}
+
 function updateMarkers() {
   state.markers.forEach((m, id) => {
-    const c = state.cities.find((x) => x.id === id);
+    const c = findPlace(id);
+    if (!c) return;
     const s = state.summary.get(id);
     const active = id === state.selected;
     const t = s && s.temp_c != null ? Math.round(s.temp_c) : null;
     const el = m.getElement();
     el.classList.toggle("active", active);
-    el.innerHTML = `<span class="pin${active ? " active" : ""}"><span class="b"><span class="sw" style="background:${t == null ? "#c7ccd3" : tempColor(t)}"></span>${t == null ? "--" : t + "°"}<span class="n">${c.name}</span></span></span>`;
+    el.setAttribute("aria-label", c.name);
+    const extra = c.id.startsWith("@");
+    el.innerHTML = `<span class="pin${active ? " active" : ""}${extra ? " extra" : ""}"><span class="b"><span class="sw" style="background:${t == null ? "#c7ccd3" : tempColor(t)}"></span>${t == null ? "--" : t + "°"}<span class="n"></span></span></span>`;
+    el.querySelector(".n").textContent = c.name;
   });
   declutter();
 }
@@ -607,11 +808,13 @@ function declutter() {
   if (!map) return;
   const named = map.getZoom() >= NAMES_ZOOM;
   const placed = [];
-  const order = [state.selected, ...state.cities.map((c) => c.id).filter((id) => id !== state.selected)];
+  const first = [state.selected, state.place && state.place.id].filter(Boolean);
+  const order = [...new Set([...first, ...state.cities.map((c) => c.id)])];
   order.forEach((id) => {
     const m = state.markers.get(id);
     if (!m) return;
-    const c = state.cities.find((x) => x.id === id);
+    const c = findPlace(id);
+    if (!c) return;
     const p = map.project(m.getLngLat());
     const w = 56 + (named || id === state.selected ? c.name.length * 7 + 6 : 0);
     const box = { x1: p.x - w / 2 - 3, x2: p.x + w / 2 + 3, y1: p.y - 15, y2: p.y + 15 };
