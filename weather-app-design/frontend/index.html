@@ -4,135 +4,199 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mausam · India weather</title>
-  <meta name="description" content="A simple, honest view of the weather in India right now and later today.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Manrope:wght@400;500;600;700&display=swap">
+  <meta name="description" content="India weather, Apple-clean. Live from MET Norway.">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <h1 class="brand">
-      <small>India · at a glance</small>
-      <span class="mark">Mausam</span>
-    </h1>
-    <button class="theme-toggle" id="themeBtn" aria-label="Switch theme">
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="4"/>
-        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-      </svg>
-      <span>Theme</span>
-    </button>
-  </header>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <div>
+        <div class="brand-name">Mausam</div>
+        <div class="brand-sub">India weather</div>
+      </div>
+    </div>
 
-  <main>
-    <section class="map-card" aria-label="Map of India">
+    <label class="search" role="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="searchInput" placeholder="Search city" aria-label="Search city">
+    </label>
+
+    <div class="city-list" id="cityList" aria-label="Cities"></div>
+
+    <div class="pill" id="sourcePill" title="Weather data source">
+      <span class="dot"></span><span id="sourceText">Live · MET Norway</span>
+    </div>
+  </aside>
+
+  <section class="main">
+    <div class="card hero" id="hero">
+      <div class="hero-sky" id="heroSky"></div>
+      <div class="hero-top">
+        <div class="hero-place">
+          <svg class="pin" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+          <span id="heroPlace">—</span>
+        </div>
+        <div class="hero-time" id="heroTime">—</div>
+      </div>
+      <div class="hero-main">
+        <div class="hero-temp"><span id="heroTemp">—</span><sup>°C</sup></div>
+        <div class="hero-cond">
+          <div class="label" id="heroLabel">—</div>
+          <div class="range" id="heroRange">—</div>
+        </div>
+      </div>
+      <div class="hero-icon" id="heroIcon"></div>
+      <div class="hero-sentence" id="heroSentence">Loading today's weather…</div>
+    </div>
+
+    <div class="card hourly">
+      <h3>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Hourly forecast
+      </h3>
+      <div class="hourly-track" id="hourly"></div>
+    </div>
+
+    <div class="highlights">
+      <div class="card tile">
+        <h3>UV Index</h3>
+        <div class="val"><span id="uvVal">—</span><span class="u" id="uvLabel"></span></div>
+        <div class="uv-gauge"><svg viewBox="0 0 200 100" aria-hidden="true">
+          <defs>
+            <linearGradient id="uvg" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0" stop-color="#30d158"/>
+              <stop offset=".4" stop-color="#ffd60a"/>
+              <stop offset=".7" stop-color="#ff9f0a"/>
+              <stop offset="1" stop-color="#ff3b30"/>
+            </linearGradient>
+          </defs>
+          <path d="M20 90 A80 80 0 0 1 180 90" fill="none" stroke="url(#uvg)" stroke-width="10" stroke-linecap="round" opacity=".3"/>
+          <path id="uvArc" d="M20 90 A80 80 0 0 1 180 90" fill="none" stroke="url(#uvg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 1000"/>
+        </svg></div>
+        <div class="caption" id="uvCap">—</div>
+      </div>
+
+      <div class="card tile">
+        <h3>Wind</h3>
+        <div class="val"><span id="windVal">—</span><span class="u" id="windU">km/h</span></div>
+        <div class="wind-wave"><svg viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="wind" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stop-color="#0a84ff" stop-opacity=".4"/>
+              <stop offset="1" stop-color="#0a84ff" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0 40 C 30 20 60 50 90 32 S 150 18 180 34 S 240 48 300 24 L300 60 L0 60 Z" fill="url(#wind)"/>
+          <path d="M0 40 C 30 20 60 50 90 32 S 150 18 180 34 S 240 48 300 24" fill="none" stroke="#0a84ff" stroke-width="1.5"/>
+        </svg></div>
+        <div class="caption" id="windCap">—</div>
+      </div>
+
+      <div class="card tile">
+        <h3>Sunrise &amp; Sunset</h3>
+        <div class="val"><span id="sunriseVal">—</span><span class="u">AM</span></div>
+        <div class="sun-arc"><svg viewBox="0 0 240 90" aria-hidden="true">
+          <defs>
+            <linearGradient id="sunl" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0" stop-color="#ffd60a"/>
+              <stop offset="1" stop-color="#ff9f0a"/>
+            </linearGradient>
+          </defs>
+          <line x1="10" y1="80" x2="230" y2="80" stroke="currentColor" stroke-width="1" stroke-dasharray="2 4" opacity=".25"/>
+          <path d="M10 80 A110 110 0 0 1 230 80" fill="none" stroke="url(#sunl)" stroke-width="2" opacity=".5"/>
+          <circle id="sunDot" cx="120" cy="22" r="7" fill="#ffd60a" stroke="white" stroke-width="2"/>
+        </svg></div>
+        <div class="sun-times"><span id="sunriseLabel">↑ —</span><span id="sunsetLabel">↓ —</span></div>
+      </div>
+
+      <div class="card tile">
+        <h3>Humidity</h3>
+        <div class="val"><span id="humVal">—</span><span class="u">%</span></div>
+        <div class="hum-bars" id="humBars"></div>
+        <div class="caption" id="humCap">—</div>
+      </div>
+
+      <div class="card tile">
+        <h3>Visibility</h3>
+        <div class="val"><span id="visVal">—</span><span class="u">km</span></div>
+        <div class="vis-bar"></div>
+        <div class="caption" id="visCap">—</div>
+      </div>
+
+      <div class="card tile">
+        <h3>Feels Like</h3>
+        <div class="val"><span id="feelsVal">—</span><span class="u">°C</span></div>
+        <div class="feels-note" id="feelsCap">—</div>
+        <div class="caption">Based on humidity and wind.</div>
+      </div>
+    </div>
+
+    <div class="card week">
+      <h3>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        10-day forecast
+      </h3>
+      <ul id="week"></ul>
+    </div>
+
+    <div class="card map-card">
       <div class="map-head">
-        <h2>Pick a city</h2>
-        <span class="legend" id="loadingTag">Loading…</span>
+        <h3>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z"/><path d="M9 3v15M15 6v15"/></svg>
+          Across India
+        </h3>
+        <div class="map-legend"><span>Clear</span><span class="swatch"></span><span>Heavy rain</span></div>
       </div>
-      <div class="map-wrap">
-        <svg viewBox="0 0 500 600" role="img" aria-label="Simplified map of India with selectable cities">
-          <!-- Simplified India silhouette; a real border polygon replaces this later. -->
-          <path class="land" d="
-            M 128 24
-            C 170 18 220 40 258 48
-            C 300 54 346 70 388 92
-            C 420 108 450 118 472 134
-            C 466 152 448 162 432 172
-            C 418 180 400 182 384 196
-            C 372 208 378 226 390 240
-            C 404 258 416 282 412 310
-            C 408 338 398 362 388 390
-            C 378 418 362 450 342 486
-            C 324 518 308 548 290 582
-            C 274 560 258 536 244 510
-            C 230 484 216 456 200 428
-            C 186 404 172 380 158 356
-            C 142 328 124 300 110 270
-            C 94 236 82 200 76 164
-            C 72 138 82 118 94 100
-            C 104 84 116 60 128 24 Z"/>
-          <ellipse class="land" cx="310" cy="560" rx="14" ry="20"/>
-          <g id="cities"></g>
-        </svg>
-      </div>
-      <div class="map-hint">Tap a dot to see today's weather</div>
-    </section>
+      <div id="map" role="img" aria-label="India weather map"></div>
+    </div>
 
-    <section class="weather" id="weatherCard" aria-live="polite" aria-busy="false" data-mood="morning" hidden>
-      <div class="sky" id="sky">
-        <div class="sky-head">
-          <div>
-            <h2 class="place-name" id="cityName">—</h2>
-            <p class="place-sub" id="citySub"></p>
-          </div>
-          <div class="asof" id="asOf"></div>
-        </div>
+    <div class="foot">
+      <span>Weather data: <a href="https://www.met.no/" rel="noopener">MET Norway</a> (CC BY 4.0) · Tiles: <a href="https://carto.com/attributions" rel="noopener">CARTO</a> · <a href="https://www.openstreetmap.org/copyright" rel="noopener">OSM</a></span>
+      <span id="imdNote"></span>
+    </div>
+  </section>
+</div>
 
-        <div class="hero">
-          <div>
-            <div class="temp-wrap">
-              <span class="temp" id="tempNum">—</span>
-              <span class="temp-unit">°C</span>
-            </div>
-            <div class="condition" id="condText"></div>
-            <p class="commentary" id="commentary"></p>
-          </div>
-          <div class="icon-box" id="iconBox" aria-hidden="true"></div>
-        </div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-sunny" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="12" fill="#ffd60a" stroke="#ff9f0a" stroke-width="1.5"/>
+      <g stroke="#ff9f0a" stroke-width="2.5" stroke-linecap="round">
+        <line x1="32" y1="6" x2="32" y2="14"/><line x1="32" y1="50" x2="32" y2="58"/>
+        <line x1="6" y1="32" x2="14" y2="32"/><line x1="50" y1="32" x2="58" y2="32"/>
+        <line x1="13" y1="13" x2="19" y2="19"/><line x1="45" y1="45" x2="51" y2="51"/>
+        <line x1="13" y1="51" x2="19" y2="45"/><line x1="45" y1="19" x2="51" y2="13"/>
+      </g>
+    </symbol>
+    <symbol id="i-partly" viewBox="0 0 64 64">
+      <circle cx="22" cy="24" r="10" fill="#ffd60a" stroke="#ff9f0a" stroke-width="1.5"/>
+      <path d="M18 42h26a8 8 0 0 0 1-16 11 11 0 0 0-21-2 8 8 0 0 0-6 18Z" fill="#e5ecf4" stroke="#9aa0a6" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="i-cloudy" viewBox="0 0 64 64">
+      <path d="M18 44h30a9 9 0 0 0 0-18 13 13 0 0 0-25-2 9 9 0 0 0-5 20Z" fill="#eef2f6" stroke="#9aa0a6" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="i-rain" viewBox="0 0 64 64">
+      <path d="M18 36h30a9 9 0 0 0 0-18 13 13 0 0 0-25-2 9 9 0 0 0-5 20Z" fill="#dbe3ec" stroke="#8a94a4" stroke-width="1.5"/>
+      <g stroke="#0a84ff" stroke-width="2.5" stroke-linecap="round" fill="none">
+        <line x1="22" y1="46" x2="19" y2="54"/><line x1="32" y1="46" x2="29" y2="54"/><line x1="42" y1="46" x2="39" y2="54"/>
+      </g>
+    </symbol>
+    <symbol id="i-thunder" viewBox="0 0 64 64">
+      <path d="M18 36h30a9 9 0 0 0 0-18 13 13 0 0 0-25-2 9 9 0 0 0-5 20Z" fill="#cbd3dc" stroke="#6b7380" stroke-width="1.5"/>
+      <path d="M30 40 24 54h8l-4 8 12-14h-8l6-8Z" fill="#ffd60a" stroke="#ff9f0a" stroke-width="1.2"/>
+    </symbol>
+    <symbol id="i-haze" viewBox="0 0 64 64">
+      <circle cx="32" cy="26" r="10" fill="#ffd60a" stroke="#ff9f0a" stroke-width="1.3" opacity=".75"/>
+      <g stroke="#9aa0a6" stroke-width="3" stroke-linecap="round">
+        <line x1="10" y1="42" x2="54" y2="42"/><line x1="14" y1="50" x2="50" y2="50"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
 
-        <div class="chips">
-          <div class="chip"><span class="k">Feels like</span><span class="v" id="feels">—</span></div>
-          <div class="chip"><span class="k">Rain next hour</span><span class="v" id="rain">—</span></div>
-          <div class="chip"><span class="k">Wind</span><span class="v" id="wind">—</span></div>
-          <div class="chip"><span class="k">Humidity</span><span class="v" id="hum">—</span></div>
-        </div>
-      </div>
-
-      <div class="panel-body">
-        <div class="meteogram">
-          <div class="section-head">
-            <h3>Later today</h3>
-            <span class="meta" id="hourlyRange">next 12 hours</span>
-          </div>
-          <div class="meteogram-wrap">
-            <svg class="chart" id="chart" viewBox="0 0 600 110" preserveAspectRatio="none" aria-hidden="true"></svg>
-            <div class="cells" id="hours"></div>
-          </div>
-        </div>
-
-        <div class="sun">
-          <div class="section-head">
-            <h3>Sun today</h3>
-            <span class="meta" id="dayLen"></span>
-          </div>
-          <div class="sun-track">
-            <svg id="sunTrack" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden="true"></svg>
-          </div>
-          <div class="sun-labels">
-            <span>Sunrise <b id="sunrise">—</b></span>
-            <span>Sunset <b id="sunset">—</b></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="credit">
-        Weather data from
-        <a href="https://api.met.no" rel="noopener">MET Norway</a>
-        (<a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>)<span id="imdCredit" hidden> · with
-        <a href="https://mausam.imd.gov.in/" rel="noopener">India Meteorological Department</a></span>.
-      </div>
-    </section>
-
-    <section class="weather empty" id="emptyCard">
-      <h2>Welcome</h2>
-      <p>Pick a city on the map to see its weather right now and later today — a plain sentence about what's coming, the temperature trend, when the sun sets, and whether to grab an umbrella.</p>
-    </section>
-  </main>
-
-  <div class="error" id="errorBar" role="alert" hidden></div>
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

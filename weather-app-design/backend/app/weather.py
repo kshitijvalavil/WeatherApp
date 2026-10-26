@@ -55,6 +55,8 @@ def for_city(city_id: str) -> dict | None:
 
     current = metno.current(forecast)
     hours = metno.hourly(forecast, hours=12)
+    days = metno.daily(forecast, days=10)
+    vis = metno.visibility_km(current)
 
     # IMD data goes alongside MET Norway's when it's available.
     imd_now = imd.current_weather(c.get("imd_id"))
@@ -64,11 +66,15 @@ def for_city(city_id: str) -> dict | None:
         "city": {k: c[k] for k in ("id", "name", "state", "lat", "lon")},
         "current": {
             "temp_c": current.get("temp_c"),
+            "feels_c": current.get("feels_c"),
             "symbol": _group(current.get("symbol")),
             "raw_symbol": current.get("symbol"),
             "wind_kmh": current.get("wind_kmh"),
+            "wind_dir": current.get("wind_dir"),
             "humidity": current.get("humidity"),
             "cloud_pct": current.get("cloud_pct"),
+            "uv_index": current.get("uv_index"),
+            "visibility_km": vis,
         },
         "hourly": [
             {
@@ -78,6 +84,16 @@ def for_city(city_id: str) -> dict | None:
                 "rain_mm": h["rain_mm"],
             }
             for h in hours
+        ],
+        "daily": [
+            {
+                "date": d["date"],
+                "hi_c": d["hi_c"],
+                "lo_c": d["lo_c"],
+                "rain_mm": d["rain_mm"],
+                "symbol": _group(d["symbol"]),
+            }
+            for d in days
         ],
         "sun": _sun(sun),
         "imd": {
