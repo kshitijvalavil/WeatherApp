@@ -33,7 +33,7 @@
       </div>
       <div class="map-wrap">
         <svg viewBox="0 0 500 600" role="img" aria-label="Simplified map of India with selectable cities">
-          <!-- Simplified India silhouette; the real border polygon lands in a later PR. -->
+          <!-- Simplified India silhouette; a real border polygon replaces this later. -->
           <path class="land" d="
             M 128 24
             C 170 18 220 40 258 48
@@ -60,13 +60,12 @@
       <div class="map-hint">Tap a dot to see today's weather</div>
     </section>
 
-    <section class="weather" id="weatherCard" aria-live="polite" aria-busy="false" data-mood="clear-day" hidden>
-      <div class="sky">
+    <section class="weather" id="weatherCard" aria-live="polite" aria-busy="false" data-mood="morning" hidden>
+      <div class="sky" id="sky">
         <div class="sky-head">
           <div>
             <h2 class="place-name" id="cityName">—</h2>
             <p class="place-sub" id="citySub"></p>
-            <span class="badge" id="moodBadge" hidden></span>
           </div>
           <div class="asof" id="asOf"></div>
         </div>
@@ -77,28 +76,28 @@
               <span class="temp" id="tempNum">—</span>
               <span class="temp-unit">°C</span>
             </div>
-            <div class="cond" id="condText"></div>
-            <p class="oneliner" id="oneliner"></p>
+            <div class="condition" id="condText"></div>
+            <p class="commentary" id="commentary"></p>
           </div>
           <div class="icon-box" id="iconBox" aria-hidden="true"></div>
+        </div>
+
+        <div class="chips">
+          <div class="chip"><span class="k">Feels like</span><span class="v" id="feels">—</span></div>
+          <div class="chip"><span class="k">Rain next hour</span><span class="v" id="rain">—</span></div>
+          <div class="chip"><span class="k">Wind</span><span class="v" id="wind">—</span></div>
+          <div class="chip"><span class="k">Humidity</span><span class="v" id="hum">—</span></div>
         </div>
       </div>
 
       <div class="panel-body">
-        <div class="stats">
-          <div class="stat"><div class="k">Feels like</div><div class="v" id="feels">—</div></div>
-          <div class="stat"><div class="k">Rain next hour</div><div class="v" id="rain">—</div></div>
-          <div class="stat"><div class="k">Wind</div><div class="v" id="wind">—</div></div>
-          <div class="stat"><div class="k">Humidity</div><div class="v" id="hum">—</div></div>
-        </div>
-
-        <div class="hourly">
+        <div class="meteogram">
           <div class="section-head">
             <h3>Later today</h3>
             <span class="meta" id="hourlyRange">next 12 hours</span>
           </div>
-          <div class="chart-wrap" id="chartWrap">
-            <svg class="chart" id="chart" viewBox="0 0 600 68" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="meteogram-wrap">
+            <svg class="chart" id="chart" viewBox="0 0 600 110" preserveAspectRatio="none" aria-hidden="true"></svg>
             <div class="cells" id="hours"></div>
           </div>
         </div>
@@ -109,7 +108,7 @@
             <span class="meta" id="dayLen"></span>
           </div>
           <div class="sun-track">
-            <svg id="sunTrack" viewBox="0 0 400 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <svg id="sunTrack" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
           <div class="sun-labels">
             <span>Sunrise <b id="sunrise">—</b></span>
@@ -128,7 +127,7 @@
 
     <section class="weather empty" id="emptyCard">
       <h2>Welcome</h2>
-      <p>Pick a city on the map to see its weather right now and later today — temperature, rain chance, when the sun sets, and whether to grab an umbrella on the way out.</p>
+      <p>Pick a city on the map to see its weather right now and later today — a plain sentence about what's coming, the temperature trend, when the sun sets, and whether to grab an umbrella.</p>
     </section>
   </main>
 
