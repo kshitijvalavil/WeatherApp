@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mausam · India weather</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <small>India · at a glance</small>
+      Mausam
+    </div>
+    <button class="theme-toggle" id="themeBtn" aria-label="Switch theme">Switch theme</button>
+  </header>
+
+  <main>
+    <section class="map-card" aria-label="Map of India">
+      <div class="map-head">
+        <h2>Pick a city</h2>
+        <span class="legend" id="loadingTag">Loading…</span>
+      </div>
+      <div class="map-wrap">
+        <svg viewBox="0 0 500 600" role="img" aria-label="Simplified map of India with selectable cities">
+          <!-- Simplified India silhouette; the real map art replaces this later. -->
+          <path class="land" d="
+            M 128 24
+            C 170 18 220 40 258 48
+            C 300 54 346 70 388 92
+            C 420 108 450 118 472 134
+            C 466 152 448 162 432 172
+            C 418 180 400 182 384 196
+            C 372 208 378 226 390 240
+            C 404 258 416 282 412 310
+            C 408 338 398 362 388 390
+            C 378 418 362 450 342 486
+            C 324 518 308 548 290 582
+            C 274 560 258 536 244 510
+            C 230 484 216 456 200 428
+            C 186 404 172 380 158 356
+            C 142 328 124 300 110 270
+            C 94 236 82 200 76 164
+            C 72 138 82 118 94 100
+            C 104 84 116 60 128 24 Z"/>
+          <ellipse class="land" cx="310" cy="560" rx="14" ry="20"/>
+          <g id="cities"></g>
+        </svg>
+      </div>
+      <div class="map-hint" id="mapHint">Tap a dot to see today's weather.</div>
+    </section>
+
+    <section class="weather" id="weatherCard" aria-live="polite" hidden>
+      <div class="place">
+        <div>
+          <h2 id="cityName">—</h2>
+          <p id="cityNote"></p>
+        </div>
+        <div class="asof" id="asOf"></div>
+      </div>
+
+      <div class="now">
+        <div class="icon-box" id="iconBox" aria-hidden="true"></div>
+        <div>
+          <div class="temp"><span id="tempNum">—</span><sup>°C</sup></div>
+          <div class="cond" id="condText"></div>
+          <p class="oneliner" id="oneliner"></p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Feels like</div><div class="v" id="feels">—</div></div>
+        <div class="stat"><div class="k">Rain next hour</div><div class="v" id="rain">—</div></div>
+        <div class="stat"><div class="k">Wind</div><div class="v" id="wind">—</div></div>
+        <div class="stat"><div class="k">Humidity</div><div class="v" id="hum">—</div></div>
+      </div>
+
+      <div class="hourly">
+        <h3>Later today</h3>
+        <div class="hours" id="hours"></div>
+      </div>
+
+      <div class="sun-row">
+        <span>Sunrise <b id="sunrise">—</b></span>
+        <span>Sunset <b id="sunset">—</b></span>
+      </div>
+
+      <div class="credit">
+        Weather data from
+        <a href="https://api.met.no" rel="noopener">MET Norway</a>
+        (<a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>)
+        <span id="imdCredit" hidden> · and the
+          <a href="https://mausam.imd.gov.in/" rel="noopener">India Meteorological Department</a></span>.
+      </div>
+    </section>
+
+    <section class="weather" id="emptyCard">
+      <div class="empty">
+        <h2>Welcome</h2>
+        <p>Pick a city on the map to see its weather right now and later today.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="error" id="errorBar" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
