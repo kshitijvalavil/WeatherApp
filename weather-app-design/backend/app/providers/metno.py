@@ -110,16 +110,100 @@ def current(forecast: dict) -> dict:
     first = series[0]
     inst = first["data"]["instant"]["details"]
     one_hour = first["data"].get("next_1_hours", {}).get("summary", {})
+    temp = inst.get("air_temperature")
+    hum = inst.get("relative_humidity")
+    wind = _ms_to_kmh(inst.get("wind_speed"))
     return {
         "time": first["time"],
-        "temp_c": inst.get("air_temperature"),
-        "wind_kmh": _ms_to_kmh(inst.get("wind_speed")),
+        "temp_c": temp,
+        "feels_c": _feels_like(temp, hum, wind),
+        "wind_kmh": wind,
         "wind_dir": inst.get("wind_from_direction"),
-        "humidity": inst.get("relative_humidity"),
+        "humidity": hum,
         "pressure": inst.get("air_pressure_at_sea_level"),
         "cloud_pct": inst.get("cloud_area_fraction"),
+        "uv_index": inst.get("ultraviolet_index_clear_sky"),
+        "fog_pct": inst.get("fog_area_fraction"),
         "symbol": one_hour.get("symbol_code"),
     }
+
+
+def daily(forecast: dict, days: int = 10) -> list[dict]:
+    """Aggregate the hourly timeseries into one row per calendar day (IST)."""
+    from datetime import datetime, timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+
+    buckets: dict[str, dict] = {}
+    for row in forecast["properties"]["timeseries"]:
+        t = datetime.fromisoformat(row["time"].replace("Z", "+00:00")).astimezone(ist)
+        key = t.strftime("%Y-%m-%d")
+        details = row["data"]["instant"]["details"]
+        temp = details.get("air_temperature")
+        six = row["data"].get("next_6_hours", {})
+        one = row["data"].get("next_1_hours", {})
+        rain = (six.get("details", {}) or {}).get("precipitation_amount") \
+            or (one.get("details", {}) or {}).get("precipitation_amount") or 0.0
+        sym = (six.get("summary", {}) or {}).get("symbol_code") \
+            or (one.get("summary", {}) or {}).get("symbol_code")
+
+        b = buckets.setdefault(key, {"date": key, "temps": [], "symbols": [], "rain": 0.0, "hour_sym": {}})
+        if temp is not None:
+            b["temps"].append((t.hour, temp))
+        if sym:
+            b["symbols"].append(sym)
+            # Prefer afternoon symbol as the day's representative one.
+            b["hour_sym"][t.hour] = sym
+        b["rain"] += float(rain or 0.0)
+
+    out = []
+    for b in list(buckets.values())[:days]:
+        if not b["temps"]:
+            continue
+        hi = max(v for _, v in b["temps"])
+        lo = min(v for _, v in b["temps"])
+        # Pick a representative symbol: whatever's at 14:00 if present, else most common.
+        rep = b["hour_sym"].get(14) or b["hour_sym"].get(12) or (b["symbols"][0] if b["symbols"] else None)
+        out.append({
+            "date": b["date"],
+            "hi_c": round(hi, 1),
+            "lo_c": round(lo, 1),
+            "rain_mm": round(b["rain"], 1),
+            "symbol": rep,
+        })
+    return out
+
+
+def _feels_like(t_c, humidity, wind_kmh):
+    """Rough apparent temperature — Steadman-style for warm, wind-chill for cold."""
+    if t_c is None:
+        return None
+    if humidity is None:
+        humidity = 60
+    if wind_kmh is None:
+        wind_kmh = 0
+    # Australian Apparent Temperature (simple and global)
+    import math
+    e = (humidity / 100.0) * 6.105 * math.exp(17.27 * t_c / (237.7 + t_c))
+    at = t_c + 0.33 * e - 0.70 * (wind_kmh / 3.6) - 4.00
+    return round(at, 1)
+
+
+def visibility_km(current_dict: dict) -> float | None:
+    """MET Norway's compact feed has no visibility. Estimate from fog + cloud + humidity."""
+    fog = current_dict.get("fog_pct")
+    hum = current_dict.get("humidity")
+    cloud = current_dict.get("cloud_pct")
+    if fog is None and hum is None and cloud is None:
+        return None
+    fog = fog or 0
+    hum = hum or 0
+    cloud = cloud or 0
+    # Start at 20 km clear, deduct for fog/humidity/cloud.
+    v = 20.0
+    v -= (fog / 100.0) * 18.0
+    v -= max(0, (hum - 70)) * 0.15
+    v -= (cloud / 100.0) * 2.0
+    return max(0.3, round(v, 1))
 
 
 def hourly(forecast: dict, hours: int = 12) -> list[dict]:
