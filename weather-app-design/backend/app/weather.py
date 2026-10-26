@@ -74,6 +74,7 @@ def for_city(city_id: str) -> dict | None:
             "humidity": current.get("humidity"),
             "cloud_pct": current.get("cloud_pct"),
             "uv_index": current.get("uv_index"),
+            "uv_peak": metno.uv_peak(forecast),
             "visibility_km": vis,
         },
         "hourly": [
@@ -82,6 +83,7 @@ def for_city(city_id: str) -> dict | None:
                 "temp_c": h["temp_c"],
                 "symbol": _group(h["symbol"]),
                 "rain_mm": h["rain_mm"],
+                "rain_prob": h.get("rain_prob"),
             }
             for h in hours
         ],

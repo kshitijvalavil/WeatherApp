@@ -1,7 +1,8 @@
 """MET Norway client.
 
 Covers two products:
-- Locationforecast 2.0 compact: current and hourly forecast anywhere on Earth.
+- Locationforecast 2.0 complete: current and hourly forecast anywhere on Earth
+  (complete, not compact, because only complete carries UV, fog and rain chance).
 - Sunrise 3.0: sunrise and sunset times.
 
 Rules we have to follow (from https://api.met.no/doc/TermsOfService):
@@ -85,9 +86,9 @@ def _round(x: float) -> float:
 
 
 def locationforecast(lat: float, lon: float) -> dict:
-    """Return the compact forecast for a coordinate."""
+    """Return the complete forecast for a coordinate."""
     return _get(
-        f"{BASE}/locationforecast/2.0/compact",
+        f"{BASE}/locationforecast/2.0/complete",
         {"lat": _round(lat), "lon": _round(lon)},
     )
 
@@ -189,7 +190,7 @@ def _feels_like(t_c, humidity, wind_kmh):
 
 
 def visibility_km(current_dict: dict) -> float | None:
-    """MET Norway's compact feed has no visibility. Estimate from fog + cloud + humidity."""
+    """MET Norway has no visibility field. Estimate it from fog, humidity and cloud."""
     fog = current_dict.get("fog_pct")
     hum = current_dict.get("humidity")
     cloud = current_dict.get("cloud_pct")
@@ -218,8 +219,19 @@ def hourly(forecast: dict, hours: int = 12) -> list[dict]:
             "temp_c": details.get("air_temperature"),
             "symbol": one.get("summary", {}).get("symbol_code"),
             "rain_mm": one.get("details", {}).get("precipitation_amount"),
+            "rain_prob": one.get("details", {}).get("probability_of_precipitation"),
         })
     return out
+
+
+def uv_peak(forecast: dict, hours: int = 24) -> dict | None:
+    """Highest clear-sky UV index in the next `hours`, and when it happens."""
+    best = None
+    for row in forecast["properties"]["timeseries"][:hours]:
+        uv = row["data"]["instant"]["details"].get("ultraviolet_index_clear_sky")
+        if uv is not None and (best is None or uv > best["value"]):
+            best = {"value": uv, "time": row["time"]}
+    return best
 
 
 def _ms_to_kmh(ms):
