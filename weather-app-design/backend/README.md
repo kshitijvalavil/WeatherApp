@@ -23,6 +23,8 @@ python run.py
 
 Then open http://localhost:5000/api/cities or
 http://localhost:5000/api/weather?city=mumbai in your browser.
+Any spot works too: /api/weather?lat=18.51&lon=73.81, and /api/places?q=lonavala
+searches for towns.
 
 ## What's inside
 
@@ -32,12 +34,13 @@ backend/
   requirements.txt
   app/
     __init__.py              # builds the Flask app
-    routes.py                # /api/cities and /api/weather
-    cities.py                # the 10 Indian cities we support
+    routes.py                # /api/cities, /api/weather, /api/places, /api/summary
+    cities.py                # the 33 Indian cities in the list
     weather.py               # merges MET Norway + IMD into one response
     providers/
       metno.py               # Locationforecast + Sunrise
       imd.py                 # stub until IMD approves access
+      geo.py                 # place names (Nominatim) and town search (Open-Meteo)
 ```
 
 ## Production

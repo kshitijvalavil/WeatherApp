@@ -24,8 +24,15 @@
 
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="searchInput" type="search" placeholder="Search 33 cities" aria-label="Search city" autocomplete="off">
+      <input id="searchInput" type="search" placeholder="Search a city or town" aria-label="Search a city or town" autocomplete="off">
     </label>
+
+    <button class="locate" id="locateBtn" type="button">
+      <svg aria-hidden="true"><use href="#i-locate"/></svg>
+      <span id="locateText">Use my location</span>
+    </button>
+    <p class="locate-msg" id="locateMsg" role="status" hidden></p>
+    <div class="hits" id="placeResults" aria-live="polite" hidden></div>
 
     <nav class="city-list" id="cityList" aria-label="Cities"></nav>
 
@@ -95,7 +102,7 @@
     <div class="tiles">
       <section class="card tile">
         <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg>UV index</h2>
-        <div class="tile-value"><span id="uvVal">--</span></div>
+        <div class="tile-value"><span id="uvVal">--</span><span class="unit" id="uvUnit"></span></div>
         <div class="tile-sub" id="uvLabel">&nbsp;</div>
         <div class="tile-vis"><div class="meter uv"><i id="uvDot"></i></div></div>
         <p class="tile-cap" id="uvCap">&nbsp;</p>
@@ -208,6 +215,13 @@
     </symbol>
     <symbol id="i-night" viewBox="0 0 64 64">
       <path d="M40 46a18 18 0 0 1-14-29 18 18 0 1 0 22 22 18 18 0 0 1-8 7Z" fill="#f4dc8a" stroke="#d9b84e" stroke-width="1"/>
+    </symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24">
+      <path d="M20.6 3.4 3.9 10.2c-.8.3-.7 1.4.1 1.6l6.6 1.6 1.6 6.6c.2.8 1.3.9 1.6.1l6.8-16.7z" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24">
+      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="12" cy="10" r="2.6" fill="currentColor"/>
     </symbol>
     <symbol id="cloud-shape" viewBox="0 0 240 110">
       <path d="M40 100h160a38 38 0 0 0 4-75.8A55 55 0 0 0 99 18a44 44 0 0 0-59 33 25 25 0 0 0 0 49Z"/>

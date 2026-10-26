@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
 
-from .cities import find
-from .providers import metno, imd
+import math
+
+from .cities import CITIES, find
+from .providers import metno, imd, geo
 
 
 # Map MET Norway's symbol names into a small set the UI can draw.
@@ -48,7 +50,41 @@ def for_city(city_id: str) -> dict | None:
     c = find(city_id)
     if not c:
         return None
+    return _build(c)
 
+
+def for_point(lat: float, lon: float) -> dict:
+    """Weather for any coordinate, e.g. the visitor's own location.
+
+    Coordinates are rounded to about 1 km: plenty for a forecast, kinder
+    to the upstream caches, and we never need the visitor's exact spot.
+    """
+    lat, lon = round(lat, 2), round(lon, 2)
+    near = nearest_city(lat, lon)
+    place = geo.reverse(lat, lon)
+    if place is None:
+        # No place name; borrow the nearest city's if we're inside it.
+        if near["km"] < 15:
+            place = {"name": near["city"]["name"], "state": near["city"]["state"]}
+        else:
+            place = {"name": "Your location", "state": f"{near['km']:.0f} km from {near['city']['name']}"}
+    c = {"id": f"@{lat},{lon}", "name": place["name"], "state": place["state"], "lat": lat, "lon": lon}
+    return _build(c)
+
+
+def nearest_city(lat: float, lon: float) -> dict:
+    """The closest of our cities, and how far away it is."""
+    def km(c):
+        # Haversine distance.
+        p1, p2 = math.radians(lat), math.radians(c["lat"])
+        dp, dl = p2 - p1, math.radians(c["lon"] - lon)
+        h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return 6371 * 2 * math.asin(math.sqrt(h))
+    best = min(CITIES, key=km)
+    return {"city": best, "km": km(best)}
+
+
+def _build(c: dict) -> dict:
     forecast = metno.locationforecast(c["lat"], c["lon"])
     today = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%Y-%m-%d")
     sun = metno.sunrise(c["lat"], c["lon"], today)
@@ -84,6 +120,7 @@ def for_city(city_id: str) -> dict | None:
                 "symbol": _group(h["symbol"]),
                 "rain_mm": h["rain_mm"],
                 "rain_prob": h.get("rain_prob"),
+                "uv": h.get("uv"),
             }
             for h in hours
         ],
@@ -121,7 +158,6 @@ def _sun(sun_json: dict) -> dict:
 def summary() -> list[dict]:
     """Current temperature and symbol for every city, fetched in parallel."""
     from concurrent.futures import ThreadPoolExecutor
-    from .cities import CITIES
 
     def one(c):
         try:
