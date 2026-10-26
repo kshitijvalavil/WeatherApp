@@ -1,7 +1,8 @@
 """The API the web page talks to.
 
-Two endpoints:
+Endpoints:
 - GET /api/cities           — the list of supported cities
+- GET /api/summary          — current temp + symbol for every city
 - GET /api/weather?city=... — the weather for one of them
 """
 from __future__ import annotations
@@ -40,6 +41,11 @@ def city_weather():
         return jsonify({"error": f"unknown city '{city_id}'"}), 404
 
     return jsonify(data)
+
+
+@api.get("/summary")
+def all_cities_summary():
+    return jsonify({"cities": weather.summary()})
 
 
 @api.get("/health")

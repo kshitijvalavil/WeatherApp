@@ -54,7 +54,7 @@ def for_city(city_id: str) -> dict | None:
     sun = metno.sunrise(c["lat"], c["lon"], today)
 
     current = metno.current(forecast)
-    hours = metno.hourly(forecast, hours=12)
+    hours = metno.hourly(forecast, hours=24)
     days = metno.daily(forecast, days=10)
     vis = metno.visibility_km(current)
 
@@ -114,3 +114,20 @@ def _sun(sun_json: dict) -> dict:
         }
     except (KeyError, TypeError):
         return {"sunrise": None, "sunset": None}
+
+
+def summary() -> list[dict]:
+    """Current temperature and symbol for every city, fetched in parallel."""
+    from concurrent.futures import ThreadPoolExecutor
+    from .cities import CITIES
+
+    def one(c):
+        try:
+            cur = metno.current(metno.locationforecast(c["lat"], c["lon"]))
+            return {"id": c["id"], "temp_c": cur.get("temp_c"), "symbol": _group(cur.get("symbol"))}
+        except Exception:
+            return {"id": c["id"], "temp_c": None, "symbol": None}
+
+    # MET Norway allows 20 req/s; 6 workers stays well under that.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        return list(pool.map(one, CITIES))
