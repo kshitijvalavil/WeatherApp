@@ -3,29 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Mausam · India weather</title>
-  <meta name="description" content="Weather across India right now and later today. Live from MET Norway.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200..700&display=swap">
-  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <title>Mausam: weather across India</title>
+  <meta name="description" content="Current weather, the next 24 hours and the days ahead for cities and towns across India.">
+  <meta name="theme-color" content="#edefec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1422" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/anek-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=5.24.0">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true"></div>
-      <div>
-        <div class="brand-name">Mausam</div>
-        <div class="brand-sub">India weather</div>
-      </div>
-    </div>
+    <p class="brand">Mausam <span lang="hi">मौसम</span></p>
 
-    <label class="search">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="searchInput" type="search" placeholder="Search a city or town" aria-label="Search a city or town" autocomplete="off">
-    </label>
+    <input class="search" id="searchInput" type="search" placeholder="Search a city or town" aria-label="Search a city or town" autocomplete="off">
 
     <button class="locate" id="locateBtn" type="button">
       <svg aria-hidden="true"><use href="#i-locate"/></svg>
@@ -35,8 +27,6 @@
     <div class="hits" id="placeResults" aria-live="polite" hidden></div>
 
     <nav class="city-list" id="cityList" aria-label="Cities"></nav>
-
-    <div class="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
   </aside>
 
   <main class="main">
@@ -46,182 +36,121 @@
         <div class="sky-moon"></div>
         <div class="sky-stars"></div>
         <div class="sky-clouds" id="skyClouds"></div>
-        <div class="sky-haze"></div>
-        <canvas class="sky-rain" id="skyRain"></canvas>
+        <div class="sky-fog"></div>
+        <canvas class="sky-fall" id="skyFall"></canvas>
         <div class="sky-flash" id="skyFlash"></div>
       </div>
-      <div class="hero-body" id="heroBody">
-        <div class="hero-top">
-          <h1 class="hero-place" id="heroPlace">India</h1>
-          <div class="hero-time" id="heroTime"></div>
+      <div class="hero-body">
+        <h1 class="hero-place" id="heroPlace">India</h1>
+        <p class="hero-meta" id="heroMeta">&nbsp;</p>
+        <div class="hero-now">
+          <p class="hero-temp" id="heroTemp">--</p>
+          <div class="hero-facts">
+            <p class="hero-cond" id="heroCond">Loading the forecast</p>
+            <p id="heroFeels">&nbsp;</p>
+            <p id="heroRange">&nbsp;</p>
+          </div>
         </div>
-        <div class="hero-temp"><span id="heroTemp">--</span><span class="deg">°</span></div>
-        <div class="hero-cond" id="heroLabel">Loading</div>
-        <div class="hero-range" id="heroRange">&nbsp;</div>
-        <p class="hero-sentence" id="heroSentence">&nbsp;</p>
+        <p class="hero-outlook" id="heroOutlook">&nbsp;</p>
       </div>
     </section>
 
-    <section class="card hourly">
-      <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Next 24 hours</h2>
-      <div class="hourly-scroll">
-        <div class="hourly-track" id="hourly"></div>
+    <section class="panel">
+      <h2>Next 24 hours</h2>
+      <div class="hourly-scroll" tabindex="0" role="group" aria-label="Hourly forecast, scrolls sideways">
+        <div class="hourly" id="hourly"></div>
       </div>
     </section>
 
     <div class="split">
-      <section class="card map-card">
+      <section class="panel map-panel">
         <div class="map-head">
-          <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z"/><path d="M9 3v15M15 6v15"/></svg>Across India</h2>
-          <div class="seg" role="group" aria-label="Map layer">
-            <button type="button" class="on" data-layer="temp">Temperature</button>
-            <button type="button" data-layer="radar" id="radarBtn">Rain radar</button>
+          <h2>Across India</h2>
+          <div class="layers" role="group" aria-label="Map layer">
+            <button type="button" data-layer="temp" aria-pressed="true">Temperature</button>
+            <button type="button" data-layer="radar" aria-pressed="false">Rain radar</button>
           </div>
         </div>
+        <p class="map-note" id="mapNote" hidden>The map background didn't load. City temperatures are still shown.</p>
         <div class="map-wrap">
           <div id="map" aria-label="Map of India with city temperatures"></div>
-          <div class="map-note" id="mapNote" hidden>Map tiles couldn't load. City temperatures are still shown.</div>
-          <div class="map-legend" id="mapLegend">
-            <span>10°</span><span class="legend-bar temp"></span><span>40°</span>
-          </div>
+          <div class="map-legend" id="mapLegend"></div>
           <div class="radar-bar" id="radarBar" hidden>
-            <button type="button" id="radarPlay" aria-label="Pause radar"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+            <button type="button" id="radarPlay" aria-label="Pause radar"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
             <div class="radar-track"><div class="radar-fill" id="radarFill"></div></div>
             <span id="radarTime">--</span>
           </div>
         </div>
       </section>
 
-      <section class="card week">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>10-day forecast</h2>
-        <p class="week-hint">Each bar runs from the day's low to its high.</p>
-        <ul id="week"></ul>
+      <section class="panel">
+        <h2 id="dailyTitle">Days ahead</h2>
+        <ul class="daily" id="daily"></ul>
       </section>
     </div>
 
-    <div class="tiles">
-      <section class="card tile">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg>UV index</h2>
-        <div class="tile-value"><span id="uvVal">--</span><span class="unit" id="uvUnit"></span></div>
-        <div class="tile-sub" id="uvLabel">&nbsp;</div>
-        <div class="tile-vis"><div class="meter uv"><i id="uvDot"></i></div></div>
-        <p class="tile-cap" id="uvCap">&nbsp;</p>
-      </section>
-
-      <section class="card tile tile-wind">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3M3 16h15a3 3 0 1 1-3 3M3 12h7"/></svg>Wind</h2>
-        <div class="wind-row">
-          <div>
-            <div class="tile-value"><span id="windVal">--</span><span class="unit">km/h</span></div>
-            <div class="tile-sub" id="windSub">&nbsp;</div>
-          </div>
-          <svg class="compass" viewBox="0 0 100 100" aria-hidden="true">
-            <circle cx="50" cy="50" r="44" class="ring"/>
-            <g class="ticks" id="compassTicks"></g>
-            <text x="50" y="17" class="cardinal">N</text>
-            <text x="86" y="54" class="cardinal">E</text>
-            <text x="50" y="91" class="cardinal">S</text>
-            <text x="14" y="54" class="cardinal">W</text>
-            <g id="compassArrow" class="arrow-rot"><g class="arrow-wobble">
-              <path d="M50 22 L56 36 L50 33 L44 36 Z" class="arrow-head"/>
-              <line x1="50" y1="33" x2="50" y2="76" class="arrow-tail"/>
-              <circle cx="50" cy="78" r="3" class="arrow-end"/>
-            </g></g>
-          </svg>
-        </div>
-        <p class="tile-cap" id="windCap">&nbsp;</p>
-      </section>
-
-      <section class="card tile">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 18a5 5 0 0 0-10 0M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4"/></svg><span id="sunTitle">Sunset</span></h2>
-        <div class="tile-value"><span id="sunVal">--</span></div>
-        <div class="tile-vis sun-vis">
-          <svg viewBox="0 0 200 64" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M4 60 Q100 -28 196 60" class="sun-path"/>
-            <line x1="0" y1="60" x2="200" y2="60" class="horizon"/>
-          </svg>
-          <i class="sun-dot" id="sunDot"></i>
-        </div>
-        <p class="tile-cap" id="sunCap">&nbsp;</p>
-      </section>
-
-      <section class="card tile">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></svg>Humidity</h2>
-        <div class="tile-value"><span id="humVal">--</span><span class="unit">%</span></div>
-        <div class="tile-sub" id="humSub">&nbsp;</div>
-        <div class="tile-vis"><div class="meter fill"><b id="humFill"></b></div></div>
-        <p class="tile-cap" id="humCap">&nbsp;</p>
-      </section>
-
-      <section class="card tile">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>Visibility</h2>
-        <div class="tile-value"><span id="visVal">--</span><span class="unit">km</span></div>
-        <div class="tile-sub">Estimated</div>
-        <div class="tile-vis"><div class="meter fill"><b id="visFill"></b></div></div>
-        <p class="tile-cap" id="visCap">&nbsp;</p>
-      </section>
-
-      <section class="card tile">
-        <h2 class="card-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 14.8V4a2 2 0 1 0-4 0v10.8a4 4 0 1 0 4 0Z"/></svg>Feels like</h2>
-        <div class="tile-value"><span id="feelsVal">--</span><span class="deg">°</span></div>
-        <div class="tile-sub" id="feelsSub">&nbsp;</div>
-        <div class="tile-vis"><div class="meter temp"><i id="feelsDot"></i><s id="actualTick"></s></div></div>
-        <p class="tile-cap" id="feelsCap">&nbsp;</p>
-      </section>
-    </div>
+    <section class="panel">
+      <h2>Right now</h2>
+      <dl class="facts" id="facts"></dl>
+    </section>
 
     <footer class="foot">
-      <span>Forecast: <a href="https://www.met.no/" rel="noopener">MET Norway</a> (CC BY 4.0). Map: <a href="https://openfreemap.org/" rel="noopener">OpenFreeMap</a>, <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>. Radar: <a href="https://www.rainviewer.com/" rel="noopener">RainViewer</a>.</span>
-      <span id="imdNote"></span>
+      <p>Forecast from <a href="https://www.met.no/en" rel="noopener">MET Norway</a> (CC BY 4.0). Map from <a href="https://openfreemap.org/" rel="noopener">OpenFreeMap</a> and <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors. Radar from <a href="https://www.rainviewer.com/" rel="noopener">RainViewer</a>.</p>
+      <p id="status" role="status">Connecting</p>
     </footer>
   </main>
 </div>
 
+<!-- Weather icons. Colours come from CSS variables so they follow the theme. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <radialGradient id="g-sun" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#ffe680"/><stop offset="1" stop-color="#ffb800"/></radialGradient>
-    <linearGradient id="g-cloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9e2ec"/></linearGradient>
-    <linearGradient id="g-cloud-dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9d2dc"/><stop offset="1" stop-color="#8e9aa8"/></linearGradient>
-    <symbol id="i-sunny" viewBox="0 0 64 64">
-      <g stroke="#ffb800" stroke-width="3" stroke-linecap="round">
-        <path d="M32 6v7M32 51v7M6 32h7M51 32h7M13.6 13.6l5 5M45.4 45.4l5 5M13.6 50.4l5-5M45.4 18.6l5-5"/>
-      </g>
-      <circle cx="32" cy="32" r="12" fill="url(#g-sun)"/>
+    <symbol id="i-clear" viewBox="0 0 64 64">
+      <path d="M32 5v8M32 51v8M5 32h8M51 32h8M12.9 12.9l5.7 5.7M45.4 45.4l5.7 5.7M12.9 51.1l5.7-5.7M45.4 18.6l5.7-5.7" stroke="var(--ic-sun)" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="32" cy="32" r="12" fill="var(--ic-sun)"/>
+    </symbol>
+    <symbol id="i-clear-night" viewBox="0 0 64 64">
+      <path d="M40 47a18 18 0 0 1-14-30 18 18 0 1 0 22 22 18 18 0 0 1-8 8Z" fill="var(--ic-moon)"/>
     </symbol>
     <symbol id="i-partly" viewBox="0 0 64 64">
-      <g stroke="#ffb800" stroke-width="2.6" stroke-linecap="round"><path d="M24 6v5M10 20h5M14 10l3.5 3.5M34 10l-3.5 3.5"/></g>
-      <circle cx="24" cy="22" r="9" fill="url(#g-sun)"/>
-      <path d="M19 50h28a9 9 0 0 0 .8-18A12 12 0 0 0 25 30.5 9.5 9.5 0 0 0 19 50Z" fill="url(#g-cloud)" stroke="#b8c4d0" stroke-width="1"/>
-    </symbol>
-    <symbol id="i-cloudy" viewBox="0 0 64 64">
-      <path d="M30 34h20a7 7 0 0 0 .6-14A10 10 0 0 0 31 20a7.5 7.5 0 0 0-1 14Z" fill="url(#g-cloud-dark)" opacity=".8"/>
-      <path d="M15 50h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 29.5 10 10 0 0 0 15 50Z" fill="url(#g-cloud)" stroke="#b8c4d0" stroke-width="1"/>
-    </symbol>
-    <symbol id="i-rain" viewBox="0 0 64 64">
-      <path d="M15 40h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 19.5 10 10 0 0 0 15 40Z" fill="url(#g-cloud-dark)"/>
-      <g stroke="#2f8cff" stroke-width="3" stroke-linecap="round"><path d="M22 46l-3 8M32 46l-3 8M42 46l-3 8"/></g>
-    </symbol>
-    <symbol id="i-thunder" viewBox="0 0 64 64">
-      <path d="M15 38h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 17.5 10 10 0 0 0 15 38Z" fill="url(#g-cloud-dark)"/>
-      <path d="M33 36 25 50h7l-4 11 12-15h-7l5-10Z" fill="#ffc400" stroke="#f59e0b" stroke-width="1" stroke-linejoin="round"/>
-    </symbol>
-    <symbol id="i-haze" viewBox="0 0 64 64">
-      <circle cx="32" cy="24" r="10" fill="url(#g-sun)" opacity=".85"/>
-      <g stroke="#a8b3bf" stroke-width="3.5" stroke-linecap="round"><path d="M10 38h44M16 46h32M22 54h20"/></g>
+      <path d="M24 5v6M9 20h6M13.4 9.4l4.2 4.2M34.6 9.4l-4.2 4.2" stroke="var(--ic-sun)" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="24" cy="21" r="9" fill="var(--ic-sun)"/>
+      <path d="M19 52h28a9 9 0 0 0 .8-18A12 12 0 0 0 25 32.5 9.8 9.8 0 0 0 19 52Z" fill="var(--ic-cloud)"/>
     </symbol>
     <symbol id="i-partly-night" viewBox="0 0 64 64">
-      <path d="M34 30a12 12 0 0 1-9.5-19.4 12 12 0 1 0 15 15A12 12 0 0 1 34 30Z" fill="#f4dc8a" stroke="#d9b84e" stroke-width="1"/>
-      <path d="M17 52h28a9 9 0 0 0 .8-18A12 12 0 0 0 23 32.5 9.5 9.5 0 0 0 17 52Z" fill="url(#g-cloud)" stroke="#b8c4d0" stroke-width="1"/>
+      <path d="M36 28a12 12 0 0 1-9.5-19.4 12 12 0 1 0 15 15A12 12 0 0 1 36 28Z" fill="var(--ic-moon)"/>
+      <path d="M17 54h28a9 9 0 0 0 .8-18A12 12 0 0 0 23 34.5 9.8 9.8 0 0 0 17 54Z" fill="var(--ic-cloud)"/>
     </symbol>
-    <symbol id="i-night" viewBox="0 0 64 64">
-      <path d="M40 46a18 18 0 0 1-14-29 18 18 0 1 0 22 22 18 18 0 0 1-8 7Z" fill="#f4dc8a" stroke="#d9b84e" stroke-width="1"/>
+    <symbol id="i-cloudy" viewBox="0 0 64 64">
+      <path d="M31 33h19a7 7 0 0 0 .6-14A10 10 0 0 0 31 19a7.5 7.5 0 0 0 0 14Z" fill="var(--ic-cloud-dark)"/>
+      <path d="M15 51h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 30.5 10.3 10.3 0 0 0 15 51Z" fill="var(--ic-cloud)"/>
+    </symbol>
+    <symbol id="i-rain" viewBox="0 0 64 64">
+      <path d="M15 39h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 18.5 10.3 10.3 0 0 0 15 39Z" fill="var(--ic-cloud-dark)"/>
+      <path d="M22 46l-3 9M32 46l-3 9M42 46l-3 9" stroke="var(--rain)" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-thunder" viewBox="0 0 64 64">
+      <path d="M15 37h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 16.5 10.3 10.3 0 0 0 15 37Z" fill="var(--ic-cloud-dark)"/>
+      <path d="M34 33 24 49h8l-4 12 13-17h-8l5-11Z" fill="var(--ic-sun)"/>
+    </symbol>
+    <symbol id="i-snow" viewBox="0 0 64 64">
+      <path d="M15 37h29a9.5 9.5 0 0 0 .8-19A13 13 0 0 0 20 16.5 10.3 10.3 0 0 0 15 37Z" fill="var(--ic-cloud-dark)"/>
+      <g fill="var(--ic-snow)"><circle cx="21" cy="48" r="3.2"/><circle cx="32" cy="55" r="3.2"/><circle cx="43" cy="48" r="3.2"/></g>
+    </symbol>
+    <symbol id="i-fog" viewBox="0 0 64 64">
+      <path d="M17 31h27a9 9 0 0 0 .8-18A12.4 12.4 0 0 0 21 11.5 9.8 9.8 0 0 0 17 31Z" fill="var(--ic-cloud)"/>
+      <path d="M10 40h44M16 48h32M22 56h20" stroke="var(--ic-cloud-dark)" stroke-width="4" stroke-linecap="round"/>
     </symbol>
     <symbol id="i-locate" viewBox="0 0 24 24">
       <path d="M20.6 3.4 3.9 10.2c-.8.3-.7 1.4.1 1.6l6.6 1.6 1.6 6.6c.2.8 1.3.9 1.6.1l6.8-16.7z" fill="currentColor"/>
     </symbol>
-    <symbol id="i-pin" viewBox="0 0 24 24">
-      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="12" cy="10" r="2.6" fill="currentColor"/>
+    <symbol id="i-arrow" viewBox="0 0 24 24">
+      <path d="M12 21V4M5.5 10.5 12 4l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24">
+      <path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24">
+      <path d="M8 5l11 7-11 7Z" fill="currentColor"/>
     </symbol>
     <symbol id="cloud-shape" viewBox="0 0 240 110">
       <path d="M40 100h160a38 38 0 0 0 4-75.8A55 55 0 0 0 99 18a44 44 0 0 0-59 33 25 25 0 0 0 0 49Z"/>
@@ -229,7 +158,7 @@
   </defs>
 </svg>
 
-<script src="vendor/maplibre-gl.js"></script>
-<script src="app.js"></script>
+<script src="vendor/maplibre-gl.js?v=5.24.0"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

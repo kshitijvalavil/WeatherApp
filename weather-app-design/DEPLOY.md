@@ -22,7 +22,8 @@ production-feeling URL, upgrade the service to a paid tier.
 - **runtime**: python 3.12
 - **rootDir**: `weather-app-design/backend`
 - **build**: `pip install -r requirements.txt`
-- **start**: `gunicorn --workers 2 --bind 0.0.0.0:$PORT "app:create_app()"`
+- **start**: `gunicorn --workers 1 --threads 8 --bind 0.0.0.0:$PORT "app:create_app()"`
+  (one worker, so all requests share one forecast cache)
 - **health check**: `GET /api/health`
 
 ### If you want a different host
@@ -31,10 +32,3 @@ production-feeling URL, upgrade the service to a paid tier.
   the detected Python app. The start command is the same gunicorn line.
 - **Railway**: point the service at `weather-app-design/backend/`, same
   start command.
-
-## IMD access
-
-The IMD block ships off by default (`imd.py` fails soft when the API
-can't be reached). Once IMD approves access for the server's public IP,
-no code change is needed — the next request will return data and the
-frontend will show the IMD credit automatically.

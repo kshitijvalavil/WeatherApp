@@ -1,31 +1,37 @@
-"""Flask app factory.
+"""The Flask app: the JSON API under /api, and the frontend at /.
 
-Keep this file small. All the real work lives in routes.py and weather.py.
-This also serves the frontend as static files from ../frontend/ so the
-whole app runs under one command.
+The frontend is plain files in ../frontend, so one process serves
+everything and there is nothing to build.
 """
 from pathlib import Path
 
-from flask import Flask, send_from_directory
+from flask import Flask, request
+
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+
+# Files that never change under the same name can be cached for a long time.
+# Everything else is revalidated on each load, so a deploy shows up at once.
+LONG_LIVED = ("/vendor/", "/fonts/")
 
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+def create_app() -> Flask:
+    app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
 
-
-def create_app():
-    app = Flask(__name__)
-
-    # Register the API routes.
     from .routes import api
     app.register_blueprint(api)
 
-    # Serve the frontend at /.
     @app.get("/")
     def index():
-        return send_from_directory(FRONTEND_DIR, "index.html")
+        return app.send_static_file("index.html")
 
-    @app.get("/<path:filename>")
-    def frontend(filename):
-        return send_from_directory(FRONTEND_DIR, filename)
+    @app.after_request
+    def cache_static_files(response):
+        if request.path.startswith("/api/"):
+            return response
+        if request.path.startswith(LONG_LIVED):
+            response.headers["Cache-Control"] = "public, max-age=2592000"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     return app
