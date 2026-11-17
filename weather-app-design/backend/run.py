@@ -1,4 +1,4 @@
-"""Start the Flask app on http://localhost:5000."""
+"""Run the app for development at http://localhost:5000."""
 from app import create_app
 
 app = create_app()
